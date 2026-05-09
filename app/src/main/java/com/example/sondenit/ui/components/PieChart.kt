@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -129,17 +130,44 @@ fun PieChartWithLegend(
     slices: List<PieSlice>,
     centerLabel: String? = null,
     centerSubLabel: String? = null,
+    maxChartSize: androidx.compose.ui.unit.Dp = 280.dp,
+    legendBelow: Boolean = true,
 ) {
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        PieChart(
-            slices = slices,
-            centerLabel = centerLabel,
-            centerSubLabel = centerSubLabel,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-        )
-        Spacer(Modifier.height(16.dp))
-        PieLegend(slices, Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+    if (legendBelow) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .widthIn(max = maxChartSize)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                PieChart(
+                    slices = slices,
+                    centerLabel = centerLabel,
+                    centerSubLabel = centerSubLabel,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            PieLegend(slices, Modifier.fillMaxWidth().padding(horizontal = 24.dp))
+        }
+    } else {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .widthIn(max = maxChartSize)
+                    .weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                PieChart(
+                    slices = slices,
+                    centerLabel = centerLabel,
+                    centerSubLabel = centerSubLabel,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            PieLegend(slices, Modifier.weight(1f))
+        }
     }
 }

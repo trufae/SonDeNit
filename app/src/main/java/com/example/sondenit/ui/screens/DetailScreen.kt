@@ -3,17 +3,21 @@ package com.example.sondenit.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -49,13 +53,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.sondenit.R
 import com.example.sondenit.audio.AudioGrouping
 import com.example.sondenit.audio.AudioPlayer
+import com.example.sondenit.audio.NoiseGroup
 import com.example.sondenit.data.DetectedSignal
 import com.example.sondenit.data.SessionEvent
 import com.example.sondenit.data.SessionRepository
@@ -85,11 +90,13 @@ import com.example.sondenit.util.formatTimeOfDay
 import java.io.File
 import kotlin.math.sqrt
 
-// Slider ranges (seconds).
 private const val GROUP_MIN_S = 0f
-private const val GROUP_MAX_S = 300f       // up to 5 min
+private const val GROUP_MAX_S = 300f
 private const val MIN_INT_MIN_S = 0f
-private const val MIN_INT_MAX_S = 30f      // up to 30 s
+private const val MIN_INT_MAX_S = 30f
+private val WIDE_BREAKPOINT = 600.dp
+private val SECTION_PAD = 20.dp
+private val TIMELINE_PAD = 14.dp
 
 @Composable
 fun DetailScreen(
@@ -107,7 +114,6 @@ fun DetailScreen(
     var deleting by rememberSaveable { mutableStateOf(false) }
     var newName by rememberSaveable(session.id) { mutableStateOf(session.displayName) }
 
-    // Slider state in seconds (Float to keep Slider happy).
     var groupSeconds by rememberSaveable(session.id) {
         mutableFloatStateOf(SessionStats.DEFAULT_GROUPING_WINDOW_MS / 1000f)
     }
@@ -115,7 +121,6 @@ fun DetailScreen(
         mutableFloatStateOf(SessionStats.DEFAULT_MIN_INTERRUPTION_MS / 1000f)
     }
 
-    // Live-recomputed stats and groups: derivedStateOf re-runs whenever a slider moves.
     val stats by remember(events) {
         derivedStateOf {
             SessionStatsComputer.compute(
@@ -140,7 +145,6 @@ fun DetailScreen(
     val screenOnTimestamps = remember(events) {
         events.filterIsInstance<SessionEvent.ScreenOn>().map { it.timestamp }
     }
-
     val labels = remember { defaultTimelineLabels() }
 
     DisposableEffectOnDispose { player.stop() }
@@ -148,112 +152,91 @@ fun DetailScreen(
     val sessionStart = session.startedAt
     val sessionEnd = session.endedAt ?: events.lastOrNull()?.timestamp ?: session.startedAt
 
-    Box(
+    val onPlayGroup: (NoiseGroup) -> Unit = { group ->
+        val first = group.chunks.first()
+        val file = File(repo.sessionDir(session.id), first.file)
+        if (file.exists()) {
+            playingFile = first.file
+            player.play(file) { playingFile = null }
+        }
+    }
+    val onStopPlayback: () -> Unit = {
+        player.stop()
+        playingFile = null
+    }
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(NightDeep, NightMid, NightDeep))),
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 32.dp, bottom = 24.dp),
-        ) {
-            item {
-                TopBar(
-                    title = session.displayName,
-                    subtitle = formatDateLong(session.startedAt),
-                    onBack = onBack,
-                    onRename = { renaming = true },
-                    onDelete = { deleting = true },
+        val isLandscape = maxWidth > maxHeight
+        val isWide = maxWidth >= WIDE_BREAKPOINT
+
+        Column(Modifier.fillMaxSize().padding(top = 32.dp)) {
+            TopBar(
+                title = session.displayName,
+                subtitle = formatDateLong(session.startedAt),
+                onBack = onBack,
+                onRename = { renaming = true },
+                onDelete = { deleting = true },
+            )
+
+            when {
+                isLandscape -> SplitLayout(
+                    session = session,
+                    stats = stats,
+                    timelineRows = timelineRows,
+                    significantGroups = significantGroups,
+                    sessionStart = sessionStart,
+                    sessionEnd = sessionEnd,
+                    pausedRanges = pausedRanges,
+                    screenOnTimestamps = screenOnTimestamps,
+                    labels = labels,
+                    playingFile = playingFile,
+                    onPlayGroup = onPlayGroup,
+                    onStopPlayback = onStopPlayback,
+                    groupSeconds = groupSeconds,
+                    onGroupChange = { groupSeconds = it },
+                    minIntSeconds = minIntSeconds,
+                    onMinIntChange = { minIntSeconds = it },
                 )
-            }
-            item {
-                Spacer(Modifier.height(8.dp))
-                SummaryCard(session = session, stats = stats)
-            }
-            if (stats.sleptDurationMs > 0) {
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    PhasesSection(stats)
-                }
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    EventRibbon(
-                        sessionStart = sessionStart,
-                        sessionEnd = sessionEnd,
-                        groups = significantGroups,
-                        screenOnTimestamps = screenOnTimestamps,
-                        pausedRanges = pausedRanges,
-                        title = stringResource(R.string.event_ribbon),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp),
-                    )
-                }
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    AnalysisSliders(
-                        groupSeconds = groupSeconds,
-                        onGroupChange = { groupSeconds = it },
-                        minIntSeconds = minIntSeconds,
-                        onMinIntChange = { minIntSeconds = it },
-                    )
-                }
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    StatsGrid(stats = stats)
-                }
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    SignalsCard(stats = stats)
-                }
-            }
-            item {
-                Spacer(Modifier.height(20.dp))
-                Text(
-                    text = stringResource(R.string.timeline),
-                    color = OnNight,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 20.dp),
+                isWide -> WidePortraitLayout(
+                    session = session,
+                    stats = stats,
+                    timelineRows = timelineRows,
+                    significantGroups = significantGroups,
+                    sessionStart = sessionStart,
+                    sessionEnd = sessionEnd,
+                    pausedRanges = pausedRanges,
+                    screenOnTimestamps = screenOnTimestamps,
+                    labels = labels,
+                    playingFile = playingFile,
+                    onPlayGroup = onPlayGroup,
+                    onStopPlayback = onStopPlayback,
+                    groupSeconds = groupSeconds,
+                    onGroupChange = { groupSeconds = it },
+                    minIntSeconds = minIntSeconds,
+                    onMinIntChange = { minIntSeconds = it },
                 )
-                Spacer(Modifier.height(4.dp))
-            }
-            // Build the spaced/grouped timeline rows.
-            items(timelineRows.size) { idx ->
-                val row = timelineRows[idx]
-                val prev = if (idx == 0) null else timelineRows[idx - 1]
-                val gap = if (prev == null) 0L else (row.timestamp - prev.timestamp)
-                if (gap > 0) TimelineGap(gap)
-                Box(modifier = Modifier.padding(horizontal = 14.dp)) {
-                    when (row) {
-                        is TimelineRowData.Event -> TimelineRow(
-                            spec = describe(row.event, labels),
-                            showLineAbove = idx > 0,
-                            showLineBelow = idx < timelineRows.size - 1,
-                        )
-                        is TimelineRowData.Group -> {
-                            val isPlayable = row.group.chunks.first().file
-                            TimelineRow(
-                                spec = describeGroup(row.group)
-                                    .copy(playing = playingFile == isPlayable),
-                                showLineAbove = idx > 0,
-                                showLineBelow = idx < timelineRows.size - 1,
-                                onPlay = {
-                                    val first = row.group.chunks.first()
-                                    val file = File(repo.sessionDir(session.id), first.file)
-                                    if (file.exists()) {
-                                        playingFile = first.file
-                                        player.play(file) { playingFile = null }
-                                    }
-                                },
-                                onStop = {
-                                    player.stop()
-                                    playingFile = null
-                                },
-                            )
-                        }
-                    }
-                }
+                else -> CompactLayout(
+                    session = session,
+                    stats = stats,
+                    timelineRows = timelineRows,
+                    significantGroups = significantGroups,
+                    sessionStart = sessionStart,
+                    sessionEnd = sessionEnd,
+                    pausedRanges = pausedRanges,
+                    screenOnTimestamps = screenOnTimestamps,
+                    labels = labels,
+                    playingFile = playingFile,
+                    onPlayGroup = onPlayGroup,
+                    onStopPlayback = onStopPlayback,
+                    groupSeconds = groupSeconds,
+                    onGroupChange = { groupSeconds = it },
+                    minIntSeconds = minIntSeconds,
+                    onMinIntChange = { minIntSeconds = it },
+                )
             }
         }
     }
@@ -309,19 +292,268 @@ fun DetailScreen(
     }
 }
 
-private sealed interface TimelineRowData {
+// ── layout variants ────────────────────────────────────────────────────────
+
+@Composable
+private fun CompactLayout(
+    session: SleepSession,
+    stats: SessionStats,
+    timelineRows: List<TimelineRowData>,
+    significantGroups: List<NoiseGroup>,
+    sessionStart: Long,
+    sessionEnd: Long,
+    pausedRanges: List<LongRange>,
+    screenOnTimestamps: List<Long>,
+    labels: com.example.sondenit.ui.components.TimelineLabels,
+    playingFile: String?,
+    onPlayGroup: (NoiseGroup) -> Unit,
+    onStopPlayback: () -> Unit,
+    groupSeconds: Float,
+    onGroupChange: (Float) -> Unit,
+    minIntSeconds: Float,
+    onMinIntChange: (Float) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+    ) {
+        item { SummaryCard(session, stats) }
+        if (stats.sleptDurationMs > 0) {
+            item { Spacer(Modifier.height(16.dp)); PhasesSection(stats, legendBelow = true) }
+            item {
+                Spacer(Modifier.height(16.dp))
+                EventRibbon(
+                    sessionStart = sessionStart,
+                    sessionEnd = sessionEnd,
+                    groups = significantGroups,
+                    screenOnTimestamps = screenOnTimestamps,
+                    pausedRanges = pausedRanges,
+                    title = stringResource(R.string.event_ribbon),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
+                )
+            }
+            item {
+                Spacer(Modifier.height(16.dp))
+                AnalysisSliders(groupSeconds, onGroupChange, minIntSeconds, onMinIntChange)
+            }
+            item { Spacer(Modifier.height(16.dp)); StatsGrid(stats) }
+            item { Spacer(Modifier.height(16.dp)); SignalsCard(stats) }
+        }
+        timelineSection(timelineRows, labels, playingFile, onPlayGroup, onStopPlayback)
+    }
+}
+
+@Composable
+private fun WidePortraitLayout(
+    session: SleepSession,
+    stats: SessionStats,
+    timelineRows: List<TimelineRowData>,
+    significantGroups: List<NoiseGroup>,
+    sessionStart: Long,
+    sessionEnd: Long,
+    pausedRanges: List<LongRange>,
+    screenOnTimestamps: List<Long>,
+    labels: com.example.sondenit.ui.components.TimelineLabels,
+    playingFile: String?,
+    onPlayGroup: (NoiseGroup) -> Unit,
+    onStopPlayback: () -> Unit,
+    groupSeconds: Float,
+    onGroupChange: (Float) -> Unit,
+    minIntSeconds: Float,
+    onMinIntChange: (Float) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+    ) {
+        item { SummaryCard(session, stats) }
+        if (stats.sleptDurationMs > 0) {
+            item {
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = SECTION_PAD),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        PhasesSection(
+                            stats = stats,
+                            legendBelow = true,
+                            outerPadding = 0.dp,
+                            chartMaxSize = 240.dp,
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        StatsGrid(stats, outerPadding = 0.dp)
+                        SignalsCard(stats, outerPadding = 0.dp)
+                    }
+                }
+            }
+            item {
+                Spacer(Modifier.height(16.dp))
+                EventRibbon(
+                    sessionStart = sessionStart,
+                    sessionEnd = sessionEnd,
+                    groups = significantGroups,
+                    screenOnTimestamps = screenOnTimestamps,
+                    pausedRanges = pausedRanges,
+                    title = stringResource(R.string.event_ribbon),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
+                )
+            }
+            item {
+                Spacer(Modifier.height(16.dp))
+                AnalysisSliders(groupSeconds, onGroupChange, minIntSeconds, onMinIntChange)
+            }
+        }
+        timelineSection(timelineRows, labels, playingFile, onPlayGroup, onStopPlayback)
+    }
+}
+
+@Composable
+private fun SplitLayout(
+    session: SleepSession,
+    stats: SessionStats,
+    timelineRows: List<TimelineRowData>,
+    significantGroups: List<NoiseGroup>,
+    sessionStart: Long,
+    sessionEnd: Long,
+    pausedRanges: List<LongRange>,
+    screenOnTimestamps: List<Long>,
+    labels: com.example.sondenit.ui.components.TimelineLabels,
+    playingFile: String?,
+    onPlayGroup: (NoiseGroup) -> Unit,
+    onStopPlayback: () -> Unit,
+    groupSeconds: Float,
+    onGroupChange: (Float) -> Unit,
+    minIntSeconds: Float,
+    onMinIntChange: (Float) -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxSize()) {
+        // Left half: stats / sliders / signals
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+        ) {
+            item { SummaryCard(session, stats) }
+            if (stats.sleptDurationMs > 0) {
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    PhasesSection(
+                        stats = stats,
+                        legendBelow = false,
+                        chartMaxSize = 220.dp,
+                    )
+                }
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    EventRibbon(
+                        sessionStart = sessionStart,
+                        sessionEnd = sessionEnd,
+                        groups = significantGroups,
+                        screenOnTimestamps = screenOnTimestamps,
+                        pausedRanges = pausedRanges,
+                        title = stringResource(R.string.event_ribbon),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
+                    )
+                }
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    AnalysisSliders(groupSeconds, onGroupChange, minIntSeconds, onMinIntChange)
+                }
+                item { Spacer(Modifier.height(16.dp)); StatsGrid(stats) }
+                item { Spacer(Modifier.height(16.dp)); SignalsCard(stats) }
+            }
+        }
+        // Divider
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(Color.White.copy(alpha = 0.06f))
+        )
+        // Right half: timeline
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+        ) {
+            timelineSection(timelineRows, labels, playingFile, onPlayGroup, onStopPlayback)
+        }
+    }
+}
+
+// ── timeline (shared LazyListScope extension) ──────────────────────────────
+
+private fun LazyListScope.timelineSection(
+    timelineRows: List<TimelineRowData>,
+    labels: com.example.sondenit.ui.components.TimelineLabels,
+    playingFile: String?,
+    onPlayGroup: (NoiseGroup) -> Unit,
+    onStopPlayback: () -> Unit,
+) {
+    item {
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = androidx.compose.ui.res.stringResource(R.string.timeline),
+            color = OnNight,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = SECTION_PAD),
+        )
+        Spacer(Modifier.height(4.dp))
+    }
+    items(timelineRows.size) { idx ->
+        val row = timelineRows[idx]
+        val prev = if (idx == 0) null else timelineRows[idx - 1]
+        val gap = if (prev == null) 0L else (row.timestamp - prev.timestamp)
+        if (gap > 0) TimelineGap(gap)
+        Box(modifier = Modifier.padding(horizontal = TIMELINE_PAD)) {
+            when (row) {
+                is TimelineRowData.Event -> TimelineRow(
+                    spec = describe(row.event, labels),
+                    showLineAbove = idx > 0,
+                    showLineBelow = idx < timelineRows.size - 1,
+                )
+                is TimelineRowData.Group -> {
+                    val isPlayable = row.group.chunks.first().file
+                    TimelineRow(
+                        spec = describeGroup(row.group)
+                            .copy(playing = playingFile == isPlayable),
+                        showLineAbove = idx > 0,
+                        showLineBelow = idx < timelineRows.size - 1,
+                        onPlay = { onPlayGroup(row.group) },
+                        onStop = onStopPlayback,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── data + helpers ─────────────────────────────────────────────────────────
+
+sealed interface TimelineRowData {
     val timestamp: Long
     data class Event(val event: SessionEvent) : TimelineRowData {
         override val timestamp: Long get() = event.timestamp
     }
-    data class Group(val group: com.example.sondenit.audio.NoiseGroup) : TimelineRowData {
+    data class Group(val group: NoiseGroup) : TimelineRowData {
         override val timestamp: Long get() = group.startTimestamp
     }
 }
 
 private fun buildTimelineRows(
     events: List<SessionEvent>,
-    groups: List<com.example.sondenit.audio.NoiseGroup>,
+    groups: List<NoiseGroup>,
 ): List<TimelineRowData> {
     val rows = mutableListOf<TimelineRowData>()
     for (e in events) {
@@ -358,7 +590,7 @@ private fun TimelineGap(gapMs: Long) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp)
+                .padding(horizontal = TIMELINE_PAD)
                 .height(height),
             contentAlignment = Alignment.Center,
         ) {
@@ -397,7 +629,7 @@ private fun AnalysisSliders(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = SECTION_PAD),
         color = NightSurface,
         shape = RoundedCornerShape(20.dp),
     ) {
@@ -412,7 +644,6 @@ private fun AnalysisSliders(
                 value = groupSeconds,
                 min = GROUP_MIN_S,
                 max = GROUP_MAX_S,
-                steps = 0,
                 onChange = onGroupChange,
                 hint = if (groupSeconds < 1f)
                     stringResource(R.string.grouping_off)
@@ -428,7 +659,6 @@ private fun AnalysisSliders(
                 value = minIntSeconds,
                 min = MIN_INT_MIN_S,
                 max = MIN_INT_MAX_S,
-                steps = 0,
                 onChange = onMinIntChange,
                 hint = stringResource(
                     R.string.min_interruption_hint,
@@ -448,7 +678,6 @@ private fun SliderBlock(
     value: Float,
     min: Float,
     max: Float,
-    steps: Int,
     onChange: (Float) -> Unit,
     hint: String,
 ) {
@@ -479,7 +708,6 @@ private fun SliderBlock(
             value = value,
             onValueChange = onChange,
             valueRange = min..max,
-            steps = steps,
             colors = SliderDefaults.colors(
                 thumbColor = accent,
                 activeTrackColor = accent,
@@ -559,7 +787,7 @@ private fun SummaryCard(session: SleepSession, stats: SessionStats) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = SECTION_PAD),
         shape = RoundedCornerShape(24.dp),
         color = NightSurface,
     ) {
@@ -642,7 +870,12 @@ private fun qualityColor(score: Int): Pair<Color, String> = when {
 }
 
 @Composable
-private fun PhasesSection(stats: SessionStats) {
+private fun PhasesSection(
+    stats: SessionStats,
+    legendBelow: Boolean,
+    outerPadding: Dp = SECTION_PAD,
+    chartMaxSize: Dp = 280.dp,
+) {
     val slices = listOf(
         PieSlice(
             stringResource(R.string.phase_deep),
@@ -665,7 +898,7 @@ private fun PhasesSection(stats: SessionStats) {
             PinkDawn,
         ),
     )
-    Column(Modifier.padding(horizontal = 20.dp)) {
+    Column(Modifier.padding(horizontal = outerPadding)) {
         Text(
             text = stringResource(R.string.phases),
             color = OnNight,
@@ -673,17 +906,24 @@ private fun PhasesSection(stats: SessionStats) {
             fontWeight = FontWeight.SemiBold,
         )
         Spacer(Modifier.height(12.dp))
-        PieChartWithLegend(
-            slices = slices,
-            centerLabel = formatDurationShort(stats.sleptDurationMs),
-            centerSubLabel = stringResource(R.string.hours_slept),
-        )
+        Box(modifier = Modifier.widthIn(max = if (legendBelow) chartMaxSize else Dp.Infinity)) {
+            PieChartWithLegend(
+                slices = slices,
+                centerLabel = formatDurationShort(stats.sleptDurationMs),
+                centerSubLabel = stringResource(R.string.hours_slept),
+                maxChartSize = chartMaxSize,
+                legendBelow = legendBelow,
+            )
+        }
     }
 }
 
 @Composable
-private fun StatsGrid(stats: SessionStats) {
-    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+private fun StatsGrid(stats: SessionStats, outerPadding: Dp = SECTION_PAD) {
+    Column(
+        Modifier.padding(horizontal = outerPadding),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatCard(
                 icon = Icons.Filled.NotificationsActive,
@@ -720,11 +960,11 @@ private fun StatsGrid(stats: SessionStats) {
 }
 
 @Composable
-private fun SignalsCard(stats: SessionStats) {
+private fun SignalsCard(stats: SessionStats, outerPadding: Dp = SECTION_PAD) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = outerPadding),
         shape = RoundedCornerShape(20.dp),
         color = NightSurface,
     ) {
