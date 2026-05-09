@@ -1,0 +1,33 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- soft moon body -->
+    <path
+        android:fillColor="#FFF6C97A"
+        android:pathData="M62,30 a24,24 0 1,0 0,48 a32,32 0 0,1 0,-48 z" />
+
+    <!-- moon craters -->
+    <path
+        android:fillColor="#33A0732A"
+        android:pathData="M52,46 m-3.2,0 a3.2,3.2 0 1,0 6.4,0 a3.2,3.2 0 1,0 -6.4,0" />
+    <path
+        android:fillColor="#33A0732A"
+        android:pathData="M58,62 m-2.2,0 a2.2,2.2 0 1,0 4.4,0 a2.2,2.2 0 1,0 -4.4,0" />
+    <path
+        android:fillColor="#33A0732A"
+        android:pathData="M48,58 m-1.4,0 a1.4,1.4 0 1,0 2.8,0 a1.4,1.4 0 1,0 -2.8,0" />
+
+    <!-- twinkling stars -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,30 l1.2,2.6 l2.6,1.2 l-2.6,1.2 l-1.2,2.6 l-1.2,-2.6 l-2.6,-1.2 l2.6,-1.2 z" />
+    <path
+        android:fillColor="#CCFFFFFF"
+        android:pathData="M82,42 l0.8,1.8 l1.8,0.8 l-1.8,0.8 l-0.8,1.8 l-0.8,-1.8 l-1.8,-0.8 l1.8,-0.8 z" />
+    <path
+        android:fillColor="#CCFFFFFF"
+        android:pathData="M34,72 l0.8,1.8 l1.8,0.8 l-1.8,0.8 l-0.8,1.8 l-0.8,-1.8 l-1.8,-0.8 l1.8,-0.8 z" />
+</vector>

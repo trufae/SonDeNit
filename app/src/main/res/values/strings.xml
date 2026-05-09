@@ -1,0 +1,90 @@
+<resources>
+    <string name="app_name">Son de Nit</string>
+
+    <!-- Pantalla principal -->
+    <string name="home_title">Son de Nit</string>
+    <string name="home_subtitle">El teu seguiment del son</string>
+    <string name="start_sleep">Comença a dormir</string>
+    <string name="continue_sleep">Continua la sessió</string>
+    <string name="no_sessions">Encara no hi ha sessions enregistrades.\nQuan vagis a dormir, prem el botó de dalt.</string>
+    <string name="past_sessions">Sessions anteriors</string>
+
+    <!-- Sessió en curs -->
+    <string name="session_in_progress">Sessió en curs</string>
+    <string name="record">Grava</string>
+    <string name="pause">Pausa</string>
+    <string name="resume">Reprèn</string>
+    <string name="stop">Atura</string>
+    <string name="back_home">Torna a l\'inici</string>
+    <string name="recent_events">Activitat recent</string>
+    <string name="elapsed">Temps transcorregut</string>
+    <string name="ambient_noise">Soroll ambient</string>
+    <string name="recording_chunk">Detectant so…</string>
+    <string name="listening">Escoltant amb el micròfon</string>
+    <string name="paused">En pausa</string>
+
+    <!-- Confirmacions -->
+    <string name="confirm_stop_title">Atura la sessió?</string>
+    <string name="confirm_stop_message">Si atures la sessió no la podràs continuar. Després podràs revisar les estadístiques.</string>
+    <string name="confirm_stop_yes">Atura</string>
+    <string name="cancel">Cancel·la</string>
+
+    <!-- Detall sessió -->
+    <string name="session_summary">Resum del son</string>
+    <string name="hours_slept">Hores dormides</string>
+    <string name="phases">Fases del son</string>
+    <string name="phase_awake">Despert</string>
+    <string name="phase_light">Lleuger</string>
+    <string name="phase_deep">Profund</string>
+    <string name="phase_rem">REM</string>
+    <string name="quality">Qualitat del son</string>
+    <string name="quality_good">Bona</string>
+    <string name="quality_fair">Acceptable</string>
+    <string name="quality_poor">Pobra</string>
+    <string name="interruptions">Interrupcions</string>
+    <string name="noise_events">Sorolls detectats</string>
+    <string name="screen_events">Vegades que has mirat el mòbil</string>
+    <string name="signals">Indicis detectats</string>
+    <string name="signal_speech">Possibles parlaments mentre dormies</string>
+    <string name="signal_cough">Possibles tos o esternuts</string>
+    <string name="signal_movement">Possible moviment al llit</string>
+    <string name="signal_snore">Possibles roncs o respiració profunda</string>
+    <string name="signal_breathing">Respiració irregular detectada</string>
+    <string name="no_signals">No s\'han detectat senyals especials. Sembla un son tranquil.</string>
+    <string name="ambient_avg">Soroll ambient mitjà</string>
+    <string name="timeline">Línia del temps</string>
+    <string name="play_chunk">Reprodueix</string>
+    <string name="stop_chunk">Atura</string>
+    <string name="event_session_start">Inici de la sessió</string>
+    <string name="event_session_end">Final de la sessió</string>
+    <string name="event_pause">Pausa</string>
+    <string name="event_resume">Reactivació</string>
+    <string name="event_screen_on">Pantalla encesa</string>
+    <string name="event_screen_off">Pantalla apagada</string>
+    <string name="event_audio">So enregistrat</string>
+
+    <!-- Menú llista -->
+    <string name="rename">Reanomena</string>
+    <string name="delete">Esborra</string>
+    <string name="rename_dialog_title">Nou nom de la sessió</string>
+    <string name="rename_save">Desa</string>
+    <string name="delete_dialog_title">Esborra aquesta sessió?</string>
+    <string name="delete_dialog_message">Esborraràs tots els enregistraments i estadístiques. Aquesta acció no es pot desfer.</string>
+    <string name="delete_yes">Esborra</string>
+
+    <!-- Permisos -->
+    <string name="perm_title">Necessitem el micròfon</string>
+    <string name="perm_message">Per gravar els sons mentre dorms cal que ens donis permís per al micròfon. Tot es desa al teu mòbil; no s\'envia res a Internet.</string>
+    <string name="perm_grant">Dóna permís</string>
+    <string name="perm_denied">Sense permís de micròfon no es pot fer el seguiment.</string>
+
+    <!-- Notificació servei -->
+    <string name="notif_channel_name">Seguiment del son</string>
+    <string name="notif_channel_desc">Mostra que l\'aplicació està escoltant mentre dorms.</string>
+    <string name="notif_title">Son de Nit fent seguiment</string>
+    <string name="notif_text">Toca per tornar a la sessió en curs.</string>
+
+    <string name="hours_short">h</string>
+    <string name="minutes_short">min</string>
+    <string name="seconds_short">s</string>
+</resources>
