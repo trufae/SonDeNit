@@ -86,16 +86,16 @@ Install a debug build on a connected device:
 ./gradlew :app:installDebug
 ```
 
-Build the unsigned release artifact and copy it to the repository root:
+Build, align, and self-sign the release APK in the repository root:
 
 ```sh
 make release
 ```
 
-The release target copies:
+The release target creates:
 
 ```text
-app/build/outputs/apk/release/app-release-unsigned.apk -> SonDeNit-0.2.apk
+SonDeNit-0.2.apk
 ```
 
 ## Permissions
