@@ -1,18 +1,24 @@
 package com.example.sondenit.data
 
+import com.example.sondenit.audio.AudioGrouping
+import com.example.sondenit.audio.NoiseGroup
 import org.json.JSONObject
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Aggregated, derived statistics for a finished session. Computed once when
- * the session ends (and cached as stats.json) so the dashboard opens fast.
+ * Aggregated, derived statistics for a finished session. Re-computed on
+ * demand from the events file using the user-configurable [groupingWindowMs]
+ * and [minInterruptionMs]. The cache (stats.json) only stores the values
+ * computed with default parameters; the Detail screen always recomputes
+ * live so the sliders give immediate feedback.
  */
 data class SessionStats(
     val totalDurationMs: Long,
     val sleptDurationMs: Long,
     val pausedDurationMs: Long,
     val audioChunkCount: Int,
+    val audioGroupCount: Int,
     val audioChunksByClass: Map<SoundClass, Int>,
     val screenOnEvents: Int,
     val interruptions: Int,
@@ -20,16 +26,21 @@ data class SessionStats(
     val phaseDurations: Map<SleepPhase, Long>,
     val qualityScore: Int, // 0..100
     val signals: List<DetectedSignal>,
+    val groupingWindowMs: Long,
+    val minInterruptionMs: Long,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("totalDurationMs", totalDurationMs)
         put("sleptDurationMs", sleptDurationMs)
         put("pausedDurationMs", pausedDurationMs)
         put("audioChunkCount", audioChunkCount)
+        put("audioGroupCount", audioGroupCount)
         put("screenOnEvents", screenOnEvents)
         put("interruptions", interruptions)
         put("ambientAvgDb", ambientAvgDb.toDouble())
         put("qualityScore", qualityScore)
+        put("groupingWindowMs", groupingWindowMs)
+        put("minInterruptionMs", minInterruptionMs)
         val classes = JSONObject()
         audioChunksByClass.forEach { (k, v) -> classes.put(k.name, v) }
         put("audioChunksByClass", classes)
@@ -42,6 +53,9 @@ data class SessionStats(
     }
 
     companion object {
+        const val DEFAULT_GROUPING_WINDOW_MS = 30_000L
+        const val DEFAULT_MIN_INTERRUPTION_MS = 2_000L
+
         fun fromJson(json: JSONObject): SessionStats {
             val classes = mutableMapOf<SoundClass, Int>()
             json.optJSONObject("audioChunksByClass")?.let { obj ->
@@ -69,6 +83,7 @@ data class SessionStats(
                 sleptDurationMs = json.optLong("sleptDurationMs"),
                 pausedDurationMs = json.optLong("pausedDurationMs"),
                 audioChunkCount = json.optInt("audioChunkCount"),
+                audioGroupCount = json.optInt("audioGroupCount", json.optInt("audioChunkCount")),
                 audioChunksByClass = classes,
                 screenOnEvents = json.optInt("screenOnEvents"),
                 interruptions = json.optInt("interruptions"),
@@ -76,28 +91,39 @@ data class SessionStats(
                 phaseDurations = phases,
                 qualityScore = json.optInt("qualityScore"),
                 signals = signals,
+                groupingWindowMs = json.optLong("groupingWindowMs", DEFAULT_GROUPING_WINDOW_MS),
+                minInterruptionMs = json.optLong("minInterruptionMs", DEFAULT_MIN_INTERRUPTION_MS),
             )
         }
     }
 }
 
-enum class DetectedSignal { SPEECH, COUGH, MOVEMENT, SNORE, IRREGULAR_BREATHING }
+enum class DetectedSignal {
+    SPEECH, COUGH, MOVEMENT, SNORE, IRREGULAR_BREATHING, DOG_BARKING, CAT_MEOWING,
+}
 
 /**
  * Compute aggregated stats from a chronological list of events.
- * The phase estimation is intentionally simple: a sliding window over
- * activity density determines what kind of sleep was happening.
+ *
+ * Audio chunks closer than [groupingWindowMs] are merged; only groups whose
+ * total recorded audio is at least [minInterruptionMs] are counted as
+ * interruptions. The phase estimator and quality score react to the grouped
+ * count, so the user sees the effect of both sliders in real time.
  */
 object SessionStatsComputer {
-    fun compute(events: List<SessionEvent>, fallbackEnd: Long? = null): SessionStats {
-        if (events.isEmpty()) return empty()
+    fun compute(
+        events: List<SessionEvent>,
+        fallbackEnd: Long? = null,
+        groupingWindowMs: Long = SessionStats.DEFAULT_GROUPING_WINDOW_MS,
+        minInterruptionMs: Long = SessionStats.DEFAULT_MIN_INTERRUPTION_MS,
+    ): SessionStats {
+        if (events.isEmpty()) return empty(groupingWindowMs, minInterruptionMs)
         val start = events.first().timestamp
         val end = (events.lastOrNull { it is SessionEvent.SessionEnd }?.timestamp)
             ?: fallbackEnd
             ?: events.last().timestamp
         val total = max(0L, end - start)
 
-        // Pause windows
         var pausedMs = 0L
         var pauseStart: Long? = null
         events.forEach {
@@ -120,28 +146,32 @@ object SessionStatsComputer {
         val ambientAvg = if (audio.isEmpty()) 0f
         else audio.map { it.ambientDb }.average().toFloat()
 
-        // Phase estimation: bucket the timeline into 5-minute slots and count
-        // "activity points" per slot (audio chunks weighted by loudness, plus
-        // screen/pause events). Map activity density → phase.
+        val groups = AudioGrouping.group(audio, groupingWindowMs)
+        val significantGroups = groups.filter { it.totalDurationMs >= minInterruptionMs }
+
+        // Phase estimation buckets — significant noise events drive activity,
+        // small ones get smoothed away by the min-length filter.
         val bucketMs = 5 * 60_000L
         val buckets = ((total + bucketMs - 1) / bucketMs).toInt().coerceAtLeast(1)
         val activity = FloatArray(buckets)
         val pauseMask = BooleanArray(buckets)
 
+        significantGroups.forEach { g ->
+            val rel = (g.startTimestamp - start).coerceIn(0, total)
+            val idx = (rel / bucketMs).toInt().coerceIn(0, buckets - 1)
+            val loudness = ((g.peakDb - g.ambientDb).coerceAtLeast(0f)) / 20f
+            val durationWeight = (g.totalDurationMs / 1000f).coerceAtMost(15f) / 5f
+            activity[idx] += 1f + loudness + durationWeight
+        }
         events.forEach { ev ->
             val rel = (ev.timestamp - start).coerceIn(0, total)
             val idx = (rel / bucketMs).toInt().coerceIn(0, buckets - 1)
             when (ev) {
-                is SessionEvent.AudioChunk -> {
-                    val loudness = ((ev.peakDb - ev.ambientDb).coerceAtLeast(0f)) / 20f
-                    activity[idx] += 1f + loudness
-                }
                 is SessionEvent.ScreenOn, is SessionEvent.ScreenOff -> activity[idx] += 2f
                 is SessionEvent.Pause, is SessionEvent.Resume -> activity[idx] += 1f
                 else -> Unit
             }
         }
-        // Mark buckets entirely contained in a paused window.
         var p: Long? = null
         events.forEach { ev ->
             when (ev) {
@@ -175,32 +205,28 @@ object SessionStatsComputer {
             phaseMs[phase] = phaseMs.getValue(phase) + slotLen
         }
 
-        // Interruptions = count of audio chunks meaningfully louder than ambient
-        // OR distinct screen-on bursts (debounced into 5-min buckets).
-        val noisyAudio = audio.count { it.peakDb - it.ambientDb >= 12f }
+        // Interruptions = significant noise groups + screen-on bursts (debounced).
         val screenBursts = mutableSetOf<Int>()
         events.forEach { ev ->
             if (ev is SessionEvent.ScreenOn) {
                 screenBursts.add(((ev.timestamp - start) / bucketMs).toInt())
             }
         }
-        val interruptions = noisyAudio + screenBursts.size
+        val interruptions = significantGroups.size + screenBursts.size
 
-        // Quality score
         val deepRem = (phaseMs[SleepPhase.DEEP] ?: 0L) + (phaseMs[SleepPhase.REM] ?: 0L)
         val deepRemRatio = if (slept > 0) deepRem.toFloat() / slept else 0f
         val penalty = (interruptions * 4 + screenBursts.size * 2).coerceAtMost(60)
-        val rawScore = (deepRemRatio * 100f).toInt() - penalty + 30 // baseline boost
+        val rawScore = (deepRemRatio * 100f).toInt() - penalty + 30
         val qualityScore = rawScore.coerceIn(0, 100)
 
-        // Signals
         val signals = mutableListOf<DetectedSignal>()
         if ((classes[SoundClass.SPEECH] ?: 0) >= 2) signals.add(DetectedSignal.SPEECH)
         if ((classes[SoundClass.COUGH] ?: 0) >= 1) signals.add(DetectedSignal.COUGH)
         if ((classes[SoundClass.MOVEMENT] ?: 0) >= 3) signals.add(DetectedSignal.MOVEMENT)
         if ((classes[SoundClass.SNORE] ?: 0) >= 3) signals.add(DetectedSignal.SNORE)
-        // Irregular breathing heuristic: lots of snore-like classifications with
-        // wildly varying intervals between them.
+        if ((classes[SoundClass.DOG_BARK] ?: 0) >= 1) signals.add(DetectedSignal.DOG_BARKING)
+        if ((classes[SoundClass.CAT_MEOW] ?: 0) >= 1) signals.add(DetectedSignal.CAT_MEOWING)
         val snores = audio.filter { it.classification == SoundClass.SNORE }
         if (snores.size >= 5) {
             val gaps = snores.zipWithNext { a, b -> b.timestamp - a.timestamp }
@@ -215,6 +241,7 @@ object SessionStatsComputer {
             sleptDurationMs = slept,
             pausedDurationMs = pausedMs,
             audioChunkCount = audio.size,
+            audioGroupCount = groups.size,
             audioChunksByClass = classes,
             screenOnEvents = screenOnCount,
             interruptions = min(interruptions, 999),
@@ -222,14 +249,17 @@ object SessionStatsComputer {
             phaseDurations = phaseMs,
             qualityScore = qualityScore,
             signals = signals,
+            groupingWindowMs = groupingWindowMs,
+            minInterruptionMs = minInterruptionMs,
         )
     }
 
-    private fun empty() = SessionStats(
+    private fun empty(groupingWindowMs: Long, minInterruptionMs: Long) = SessionStats(
         totalDurationMs = 0,
         sleptDurationMs = 0,
         pausedDurationMs = 0,
         audioChunkCount = 0,
+        audioGroupCount = 0,
         audioChunksByClass = emptyMap(),
         screenOnEvents = 0,
         interruptions = 0,
@@ -237,5 +267,11 @@ object SessionStatsComputer {
         phaseDurations = emptyMap(),
         qualityScore = 0,
         signals = emptyList(),
+        groupingWindowMs = groupingWindowMs,
+        minInterruptionMs = minInterruptionMs,
     )
 }
+
+/** Convenience helper for callers that just want the audio groups. */
+fun List<SessionEvent>.audioGroups(windowMs: Long): List<NoiseGroup> =
+    AudioGrouping.group(filterIsInstance<SessionEvent.AudioChunk>(), windowMs)

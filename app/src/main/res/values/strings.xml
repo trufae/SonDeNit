@@ -50,7 +50,17 @@
     <string name="signal_movement">Possible moviment al llit</string>
     <string name="signal_snore">Possibles roncs o respiració profunda</string>
     <string name="signal_breathing">Respiració irregular detectada</string>
+    <string name="signal_dog">Possibles lladrucs de gos</string>
+    <string name="signal_cat">Possibles miols de gat</string>
     <string name="no_signals">No s\'han detectat senyals especials. Sembla un son tranquil.</string>
+    <string name="grouping_window">Agrupar sons propers</string>
+    <string name="grouping_window_hint">%1$s de marge entre sons</string>
+    <string name="grouping_off">Sense agrupar</string>
+    <string name="min_interruption">Durada mínima d\'interrupció</string>
+    <string name="min_interruption_hint">A partir de %1$s de so</string>
+    <string name="event_ribbon">Mapa d\'esdeveniments</string>
+    <string name="grouped_audio">%1$d sons agrupats</string>
+    <string name="single_audio">1 so detectat</string>
     <string name="ambient_avg">Soroll ambient mitjà</string>
     <string name="timeline">Línia del temps</string>
     <string name="play_chunk">Reprodueix</string>

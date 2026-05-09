@@ -20,23 +20,27 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -50,18 +54,22 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.sondenit.R
+import com.example.sondenit.audio.AudioGrouping
 import com.example.sondenit.audio.AudioPlayer
 import com.example.sondenit.data.DetectedSignal
 import com.example.sondenit.data.SessionEvent
 import com.example.sondenit.data.SessionRepository
 import com.example.sondenit.data.SessionStats
+import com.example.sondenit.data.SessionStatsComputer
 import com.example.sondenit.data.SleepPhase
 import com.example.sondenit.data.SleepSession
+import com.example.sondenit.ui.components.EventRibbon
 import com.example.sondenit.ui.components.PieChartWithLegend
 import com.example.sondenit.ui.components.PieSlice
 import com.example.sondenit.ui.components.StatCard
 import com.example.sondenit.ui.components.TimelineRow
 import com.example.sondenit.ui.components.describe
+import com.example.sondenit.ui.components.describeGroup
 import com.example.sondenit.ui.theme.Lavender
 import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightDeep
@@ -75,6 +83,13 @@ import com.example.sondenit.util.formatDateLong
 import com.example.sondenit.util.formatDurationShort
 import com.example.sondenit.util.formatTimeOfDay
 import java.io.File
+import kotlin.math.sqrt
+
+// Slider ranges (seconds).
+private const val GROUP_MIN_S = 0f
+private const val GROUP_MAX_S = 300f       // up to 5 min
+private const val MIN_INT_MIN_S = 0f
+private const val MIN_INT_MAX_S = 30f      // up to 30 s
 
 @Composable
 fun DetailScreen(
@@ -84,19 +99,54 @@ fun DetailScreen(
     onRename: (SleepSession, String) -> Unit,
     onDelete: (SleepSession) -> Unit,
 ) {
-    val ctx = LocalContext.current
     val player = remember { AudioPlayer() }
     var playingFile by remember { mutableStateOf<String?>(null) }
-    val stats = remember(session.id, session.endedAt) { repo.readStats(session.id) }
     val events = remember(session.id, session.endedAt) { repo.readEvents(session.id) }
 
     var renaming by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var newName by rememberSaveable(session.id) { mutableStateOf(session.displayName) }
 
-    DisposableEffectOnDispose { player.stop() }
+    // Slider state in seconds (Float to keep Slider happy).
+    var groupSeconds by rememberSaveable(session.id) {
+        mutableFloatStateOf(SessionStats.DEFAULT_GROUPING_WINDOW_MS / 1000f)
+    }
+    var minIntSeconds by rememberSaveable(session.id) {
+        mutableFloatStateOf(SessionStats.DEFAULT_MIN_INTERRUPTION_MS / 1000f)
+    }
+
+    // Live-recomputed stats and groups: derivedStateOf re-runs whenever a slider moves.
+    val stats by remember(events) {
+        derivedStateOf {
+            SessionStatsComputer.compute(
+                events = events,
+                fallbackEnd = session.endedAt,
+                groupingWindowMs = (groupSeconds * 1000f).toLong(),
+                minInterruptionMs = (minIntSeconds * 1000f).toLong(),
+            )
+        }
+    }
+    val audioChunks = remember(events) { events.filterIsInstance<SessionEvent.AudioChunk>() }
+    val groups by remember(audioChunks) {
+        derivedStateOf { AudioGrouping.group(audioChunks, (groupSeconds * 1000f).toLong()) }
+    }
+    val significantGroups by remember(groups) {
+        derivedStateOf { groups.filter { it.totalDurationMs >= (minIntSeconds * 1000f).toLong() } }
+    }
+    val timelineRows by remember(events) {
+        derivedStateOf { buildTimelineRows(events, groups) }
+    }
+    val pausedRanges = remember(events) { computePausedRanges(events) }
+    val screenOnTimestamps = remember(events) {
+        events.filterIsInstance<SessionEvent.ScreenOn>().map { it.timestamp }
+    }
 
     val labels = remember { defaultTimelineLabels() }
+
+    DisposableEffectOnDispose { player.stop() }
+
+    val sessionStart = session.startedAt
+    val sessionEnd = session.endedAt ?: events.lastOrNull()?.timestamp ?: session.startedAt
 
     Box(
         modifier = Modifier
@@ -105,7 +155,7 @@ fun DetailScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 0.dp, end = 0.dp, top = 32.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(top = 32.dp, bottom = 24.dp),
         ) {
             item {
                 TopBar(
@@ -120,10 +170,33 @@ fun DetailScreen(
                 Spacer(Modifier.height(8.dp))
                 SummaryCard(session = session, stats = stats)
             }
-            if (stats != null && stats.sleptDurationMs > 0) {
+            if (stats.sleptDurationMs > 0) {
                 item {
                     Spacer(Modifier.height(16.dp))
                     PhasesSection(stats)
+                }
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    EventRibbon(
+                        sessionStart = sessionStart,
+                        sessionEnd = sessionEnd,
+                        groups = significantGroups,
+                        screenOnTimestamps = screenOnTimestamps,
+                        pausedRanges = pausedRanges,
+                        title = stringResource(R.string.event_ribbon),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                    )
+                }
+                item {
+                    Spacer(Modifier.height(16.dp))
+                    AnalysisSliders(
+                        groupSeconds = groupSeconds,
+                        onGroupChange = { groupSeconds = it },
+                        minIntSeconds = minIntSeconds,
+                        onMinIntChange = { minIntSeconds = it },
+                    )
                 }
                 item {
                     Spacer(Modifier.height(16.dp))
@@ -143,30 +216,44 @@ fun DetailScreen(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
             }
-            val timelineEvents = events
-            items(timelineEvents.size, key = { it }) { idx ->
-                val event = timelineEvents[idx]
-                val spec = describe(event, labels)
-                TimelineRow(
-                    spec = spec.copy(playing = event is SessionEvent.AudioChunk && playingFile == event.file),
-                    showLineAbove = idx > 0,
-                    showLineBelow = idx < timelineEvents.size - 1,
-                    onPlay = if (event is SessionEvent.AudioChunk) {
-                        {
-                            val file = File(repo.sessionDir(session.id), event.file)
-                            if (file.exists()) {
-                                playingFile = event.file
-                                player.play(file) { playingFile = null }
-                            }
+            // Build the spaced/grouped timeline rows.
+            items(timelineRows.size) { idx ->
+                val row = timelineRows[idx]
+                val prev = if (idx == 0) null else timelineRows[idx - 1]
+                val gap = if (prev == null) 0L else (row.timestamp - prev.timestamp)
+                if (gap > 0) TimelineGap(gap)
+                Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+                    when (row) {
+                        is TimelineRowData.Event -> TimelineRow(
+                            spec = describe(row.event, labels),
+                            showLineAbove = idx > 0,
+                            showLineBelow = idx < timelineRows.size - 1,
+                        )
+                        is TimelineRowData.Group -> {
+                            val isPlayable = row.group.chunks.first().file
+                            TimelineRow(
+                                spec = describeGroup(row.group)
+                                    .copy(playing = playingFile == isPlayable),
+                                showLineAbove = idx > 0,
+                                showLineBelow = idx < timelineRows.size - 1,
+                                onPlay = {
+                                    val first = row.group.chunks.first()
+                                    val file = File(repo.sessionDir(session.id), first.file)
+                                    if (file.exists()) {
+                                        playingFile = first.file
+                                        player.play(file) { playingFile = null }
+                                    }
+                                },
+                                onStop = {
+                                    player.stop()
+                                    playingFile = null
+                                },
+                            )
                         }
-                    } else null,
-                    onStop = {
-                        player.stop()
-                        playingFile = null
-                    },
-                )
+                    }
+                }
             }
         }
     }
@@ -220,6 +307,192 @@ fun DetailScreen(
             text = { Text(stringResource(R.string.delete_dialog_message)) },
         )
     }
+}
+
+private sealed interface TimelineRowData {
+    val timestamp: Long
+    data class Event(val event: SessionEvent) : TimelineRowData {
+        override val timestamp: Long get() = event.timestamp
+    }
+    data class Group(val group: com.example.sondenit.audio.NoiseGroup) : TimelineRowData {
+        override val timestamp: Long get() = group.startTimestamp
+    }
+}
+
+private fun buildTimelineRows(
+    events: List<SessionEvent>,
+    groups: List<com.example.sondenit.audio.NoiseGroup>,
+): List<TimelineRowData> {
+    val rows = mutableListOf<TimelineRowData>()
+    for (e in events) {
+        if (e !is SessionEvent.AudioChunk) rows.add(TimelineRowData.Event(e))
+    }
+    for (g in groups) rows.add(TimelineRowData.Group(g))
+    rows.sortBy { it.timestamp }
+    return rows
+}
+
+private fun computePausedRanges(events: List<SessionEvent>): List<LongRange> {
+    val out = mutableListOf<LongRange>()
+    var p: Long? = null
+    events.forEach { ev ->
+        when (ev) {
+            is SessionEvent.Pause -> p = ev.timestamp
+            is SessionEvent.Resume -> p?.let { ps -> out.add(ps..ev.timestamp); p = null }
+            is SessionEvent.SessionEnd -> p?.let { ps -> out.add(ps..ev.timestamp); p = null }
+            else -> Unit
+        }
+    }
+    return out
+}
+
+@Composable
+private fun TimelineGap(gapMs: Long) {
+    if (gapMs <= 0) return
+    val seconds = gapMs / 1000.0
+    val px = (sqrt(seconds) * 2.5).coerceIn(0.0, 88.0)
+    val height = px.toFloat().dp
+    if (seconds < 60) {
+        Spacer(Modifier.height(height))
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+                .height(height),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .height(1.dp)
+                        .width(40.dp)
+                        .background(Color.White.copy(alpha = 0.08f)),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = formatDurationShort(gapMs) + " després",
+                    color = OnNightMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .height(1.dp)
+                        .width(40.dp)
+                        .background(Color.White.copy(alpha = 0.08f)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnalysisSliders(
+    groupSeconds: Float,
+    onGroupChange: (Float) -> Unit,
+    minIntSeconds: Float,
+    onMinIntChange: (Float) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        color = NightSurface,
+        shape = RoundedCornerShape(20.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            SliderBlock(
+                icon = Icons.Filled.Layers,
+                accent = Lavender,
+                label = stringResource(R.string.grouping_window),
+                value = groupSeconds,
+                min = GROUP_MIN_S,
+                max = GROUP_MAX_S,
+                steps = 0,
+                onChange = onGroupChange,
+                hint = if (groupSeconds < 1f)
+                    stringResource(R.string.grouping_off)
+                else stringResource(
+                    R.string.grouping_window_hint,
+                    formatSeconds(groupSeconds.toInt()),
+                ),
+            )
+            SliderBlock(
+                icon = Icons.Filled.HourglassBottom,
+                accent = MoonGlow,
+                label = stringResource(R.string.min_interruption),
+                value = minIntSeconds,
+                min = MIN_INT_MIN_S,
+                max = MIN_INT_MAX_S,
+                steps = 0,
+                onChange = onMinIntChange,
+                hint = stringResource(
+                    R.string.min_interruption_hint,
+                    if (minIntSeconds < 1f) "0,${(minIntSeconds * 10).toInt()} s"
+                    else formatSeconds(minIntSeconds.toInt()),
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SliderBlock(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accent: Color,
+    label: String,
+    value: Float,
+    min: Float,
+    max: Float,
+    steps: Int,
+    onChange: (Float) -> Unit,
+    hint: String,
+) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = label,
+                color = OnNight,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = hint,
+                color = accent,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = min..max,
+            steps = steps,
+            colors = SliderDefaults.colors(
+                thumbColor = accent,
+                activeTrackColor = accent,
+                inactiveTrackColor = accent.copy(alpha = 0.25f),
+            ),
+        )
+    }
+}
+
+private fun formatSeconds(sec: Int): String = when {
+    sec < 60 -> "$sec s"
+    sec % 60 == 0 -> "${sec / 60} min"
+    else -> "${sec / 60} min ${sec % 60} s"
 }
 
 @Composable
@@ -282,7 +555,7 @@ private fun TopBar(
 }
 
 @Composable
-private fun SummaryCard(session: SleepSession, stats: SessionStats?) {
+private fun SummaryCard(session: SleepSession, stats: SessionStats) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -306,9 +579,8 @@ private fun SummaryCard(session: SleepSession, stats: SessionStats?) {
                 )
             }
             Spacer(Modifier.height(14.dp))
-            val sleptMs = stats?.sleptDurationMs ?: 0L
             Text(
-                text = formatDurationShort(sleptMs),
+                text = formatDurationShort(stats.sleptDurationMs),
                 color = OnNight,
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
@@ -329,10 +601,8 @@ private fun SummaryCard(session: SleepSession, stats: SessionStats?) {
                 color = OnNightMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
-            if (stats != null) {
-                Spacer(Modifier.height(14.dp))
-                QualityBadge(score = stats.qualityScore)
-            }
+            Spacer(Modifier.height(14.dp))
+            QualityBadge(score = stats.qualityScore)
         }
     }
 }
@@ -373,7 +643,6 @@ private fun qualityColor(score: Int): Pair<Color, String> = when {
 
 @Composable
 private fun PhasesSection(stats: SessionStats) {
-    val total = stats.phaseDurations.values.sum().coerceAtLeast(1L)
     val slices = listOf(
         PieSlice(
             stringResource(R.string.phase_deep),
@@ -427,7 +696,7 @@ private fun StatsGrid(stats: SessionStats) {
                 icon = Icons.Filled.GraphicEq,
                 accent = MoonGlow,
                 label = stringResource(R.string.noise_events),
-                value = stats.audioChunkCount.toString(),
+                value = "${stats.audioGroupCount} / ${stats.audioChunkCount}",
                 modifier = Modifier.weight(1f),
             )
         }
@@ -510,4 +779,6 @@ private fun signalLabelAndColor(sig: DetectedSignal): Pair<String, Color> = when
     DetectedSignal.MOVEMENT -> stringResource(R.string.signal_movement) to SkyTeal
     DetectedSignal.SNORE -> stringResource(R.string.signal_snore) to MoonGlow
     DetectedSignal.IRREGULAR_BREATHING -> stringResource(R.string.signal_breathing) to PinkDawn
+    DetectedSignal.DOG_BARKING -> stringResource(R.string.signal_dog) to PinkDawn
+    DetectedSignal.CAT_MEOWING -> stringResource(R.string.signal_cat) to Lavender
 }

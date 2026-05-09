@@ -10,6 +10,8 @@ enum class SoundClass {
     COUGH,
     MOVEMENT,
     SNORE,
+    DOG_BARK,
+    CAT_MEOW,
     NOISE,
     UNKNOWN,
 }

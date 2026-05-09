@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.IntrinsicSize
+import com.example.sondenit.audio.NoiseGroup
 import com.example.sondenit.data.SessionEvent
 import com.example.sondenit.data.SoundClass
 import com.example.sondenit.ui.theme.Lavender
@@ -56,6 +57,7 @@ data class TimelineRowSpec(
     val accent: Color,
     val playable: Boolean = false,
     val playing: Boolean = false,
+    val countBadge: Int? = null,
 )
 
 fun describe(event: SessionEvent, contextLabels: TimelineLabels): TimelineRowSpec = when (event) {
@@ -107,14 +109,38 @@ data class TimelineLabels(
     val screenOff: String,
 )
 
-private fun describeSound(klass: SoundClass): Pair<String, Color> = when (klass) {
+fun describeGroup(group: NoiseGroup): TimelineRowSpec {
+    val (label, color) = describeSound(group.dominantClass)
+    val first = group.chunks.first()
+    val countSuffix = if (group.chunks.size > 1) " · ${group.chunks.size}" else ""
+    return TimelineRowSpec(
+        event = first,
+        title = label + countSuffix,
+        subtitle = "${com.example.sondenit.util.formatDurationShort(group.totalDurationMs)} · " +
+            "%.0f dB sobre ambient".format(
+                (group.peakDb - group.ambientDb).coerceAtLeast(0f)
+            ),
+        icon = if (group.dominantClass == SoundClass.SPEECH)
+            androidx.compose.material.icons.Icons.Filled.RecordVoiceOver
+        else androidx.compose.material.icons.Icons.Filled.GraphicEq,
+        accent = color,
+        playable = true,
+        countBadge = if (group.chunks.size > 1) group.chunks.size else null,
+    )
+}
+
+fun describeSound(klass: SoundClass): Pair<String, Color> = when (klass) {
     SoundClass.SPEECH -> "Veu detectada" to Lavender
     SoundClass.COUGH -> "Possible tos" to PinkDawn
     SoundClass.MOVEMENT -> "Moviment al llit" to SkyTeal
     SoundClass.SNORE -> "Roncs / respiració" to MoonGlow
+    SoundClass.DOG_BARK -> "Lladruc de gos" to PinkDawn
+    SoundClass.CAT_MEOW -> "Miol de gat" to Lavender
     SoundClass.NOISE -> "Soroll" to OnNightMuted
     SoundClass.UNKNOWN -> "So lleu" to OnNightMuted
 }
+
+fun colorForClass(klass: SoundClass): Color = describeSound(klass).second
 
 @Composable
 fun TimelineRow(
@@ -141,19 +167,39 @@ fun TimelineRow(
                     .height(10.dp)
                     .background(if (showLineAbove) Color.White.copy(alpha = 0.08f) else Color.Transparent)
             )
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(spec.accent.copy(alpha = 0.22f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = spec.icon,
-                    contentDescription = null,
-                    tint = spec.accent,
-                    modifier = Modifier.size(18.dp),
-                )
+            Box(contentAlignment = Alignment.TopEnd) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(spec.accent.copy(alpha = 0.22f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = spec.icon,
+                        contentDescription = null,
+                        tint = spec.accent,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                spec.countBadge?.let { n ->
+                    Surface(
+                        color = spec.accent,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .padding(start = 2.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = if (n > 99) "99+" else n.toString(),
+                                color = Color(0xFF0B0E25),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
             }
             // Connector bottom (fills remaining height)
             Box(
