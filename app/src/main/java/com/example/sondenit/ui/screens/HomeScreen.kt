@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.sondenit.R
 import com.example.sondenit.data.SessionRepository
+import com.example.sondenit.data.SessionStats
 import com.example.sondenit.data.SleepPhase
 import com.example.sondenit.data.SleepSession
 import com.example.sondenit.ui.components.SessionRow
@@ -87,14 +88,7 @@ fun HomeScreen(
             .filter { it.endedAt != null }
             .sortedBy { it.startedAt }
             .mapNotNull { session ->
-                repo.readStats(session.id)?.let { stats ->
-                    PhaseHistoryPoint(
-                        deepMs = stats.phaseDurations[SleepPhase.DEEP] ?: 0L,
-                        remMs = stats.phaseDurations[SleepPhase.REM] ?: 0L,
-                        lightMs = stats.phaseDurations[SleepPhase.LIGHT] ?: 0L,
-                        awakeMs = stats.phaseDurations[SleepPhase.AWAKE] ?: 0L,
-                    )
-                }
+                repo.readStats(session.id)?.toPhaseHistoryPoint()
             }
     }
 
@@ -319,29 +313,41 @@ private fun PrimaryActionCard(isResume: Boolean, onClick: () -> Unit) {
 }
 
 private data class PhaseHistoryPoint(
-    val deepMs: Long,
-    val remMs: Long,
-    val lightMs: Long,
-    val awakeMs: Long,
+    val deepShare: Float,
+    val remShare: Float,
+    val lightShare: Float,
+    val awakeShare: Float,
 )
 
 private data class PhaseHistoryLine(
     val label: String,
     val color: Color,
-    val value: (PhaseHistoryPoint) -> Long,
+    val value: (PhaseHistoryPoint) -> Float,
 )
+
+private fun SessionStats.toPhaseHistoryPoint(): PhaseHistoryPoint? {
+    val totalPhaseMs = phaseDurations.values.sum()
+    if (totalPhaseMs <= 0L) return null
+
+    fun shareOf(phase: SleepPhase): Float =
+        ((phaseDurations[phase] ?: 0L).toFloat() / totalPhaseMs.toFloat()).coerceIn(0f, 1f)
+
+    return PhaseHistoryPoint(
+        deepShare = shareOf(SleepPhase.DEEP),
+        remShare = shareOf(SleepPhase.REM),
+        lightShare = shareOf(SleepPhase.LIGHT),
+        awakeShare = shareOf(SleepPhase.AWAKE),
+    )
+}
 
 @Composable
 private fun PhaseHistoryGraph(points: List<PhaseHistoryPoint>) {
     val lines = listOf(
-        PhaseHistoryLine(stringResource(R.string.phase_deep), Lavender) { it.deepMs },
-        PhaseHistoryLine(stringResource(R.string.phase_rem), MoonGlow) { it.remMs },
-        PhaseHistoryLine(stringResource(R.string.phase_light), SkyTeal) { it.lightMs },
-        PhaseHistoryLine(stringResource(R.string.phase_awake), PinkDawn) { it.awakeMs },
+        PhaseHistoryLine(stringResource(R.string.phase_deep), Lavender) { it.deepShare },
+        PhaseHistoryLine(stringResource(R.string.phase_rem), MoonGlow) { it.remShare },
+        PhaseHistoryLine(stringResource(R.string.phase_light), SkyTeal) { it.lightShare },
+        PhaseHistoryLine(stringResource(R.string.phase_awake), PinkDawn) { it.awakeShare },
     )
-    val maxValue = lines
-        .maxOfOrNull { line -> points.maxOfOrNull { line.value(it) } ?: 0L }
-        ?.coerceAtLeast(1L) ?: 1L
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -356,71 +362,74 @@ private fun PhaseHistoryGraph(points: List<PhaseHistoryPoint>) {
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(10.dp))
-            Canvas(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp),
             ) {
-                val left = 8.dp.toPx()
-                val right = size.width - 8.dp.toPx()
-                val top = 8.dp.toPx()
-                val bottom = size.height - 8.dp.toPx()
-                val chartWidth = (right - left).coerceAtLeast(1f)
-                val chartHeight = (bottom - top).coerceAtLeast(1f)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val left = 8.dp.toPx()
+                    val right = size.width - 8.dp.toPx()
+                    val top = 8.dp.toPx()
+                    val bottom = size.height - 8.dp.toPx()
+                    val chartWidth = (right - left).coerceAtLeast(1f)
+                    val chartHeight = (bottom - top).coerceAtLeast(1f)
 
-                repeat(4) { idx ->
-                    val y = top + chartHeight * idx / 3f
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.08f),
-                        start = Offset(left, y),
-                        end = Offset(right, y),
-                        strokeWidth = 1.dp.toPx(),
-                    )
-                }
+                    repeat(4) { idx ->
+                        val y = top + chartHeight * idx / 3f
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.08f),
+                            start = Offset(left, y),
+                            end = Offset(right, y),
+                            strokeWidth = 1.dp.toPx(),
+                        )
+                    }
 
-                if (points.isNotEmpty()) {
-                    lines.forEach { line ->
-                        val coordinates = points.mapIndexed { index, point ->
-                            val x = if (points.size == 1) {
-                                left + chartWidth / 2f
-                            } else {
-                                left + chartWidth * index / (points.size - 1).toFloat()
+                    if (points.isNotEmpty()) {
+                        lines.forEach { line ->
+                            val coordinates = points.mapIndexed { index, point ->
+                                val x = if (points.size == 1) {
+                                    left + chartWidth / 2f
+                                } else {
+                                    left + chartWidth * index / (points.size - 1).toFloat()
+                                }
+                                val y = bottom - chartHeight * line.value(point).coerceIn(0f, 1f)
+                                Offset(x, y)
                             }
-                            val fraction = line.value(point).toFloat() / maxValue.toFloat()
-                            val y = bottom - chartHeight * fraction.coerceIn(0f, 1f)
-                            Offset(x, y)
-                        }
-                        val color = line.color.copy(alpha = 0.9f)
-                        if (coordinates.size == 1) {
-                            drawLine(
-                                color = color,
-                                start = Offset(left, coordinates.first().y),
-                                end = Offset(right, coordinates.first().y),
-                                strokeWidth = 2.dp.toPx(),
-                                cap = StrokeCap.Round,
-                            )
-                        } else {
-                            val path = Path().apply {
-                                moveTo(coordinates.first().x, coordinates.first().y)
-                                coordinates.drop(1).forEach { lineTo(it.x, it.y) }
+                            if (coordinates.size > 1) {
+                                val path = Path().apply {
+                                    moveTo(coordinates.first().x, coordinates.first().y)
+                                    coordinates.drop(1).forEach { lineTo(it.x, it.y) }
+                                }
+                                drawPath(
+                                    path = path,
+                                    color = line.color.copy(alpha = 0.9f),
+                                    style = Stroke(
+                                        width = 2.dp.toPx(),
+                                        cap = StrokeCap.Round,
+                                    ),
+                                )
                             }
-                            drawPath(
-                                path = path,
-                                color = color,
-                                style = Stroke(
-                                    width = 2.dp.toPx(),
-                                    cap = StrokeCap.Round,
-                                ),
-                            )
-                        }
-                        coordinates.forEach { point ->
-                            drawCircle(
-                                color = line.color,
-                                radius = 3.5.dp.toPx(),
-                                center = point,
-                            )
+                            coordinates.forEach { point ->
+                                drawCircle(
+                                    color = line.color,
+                                    radius = 3.5.dp.toPx(),
+                                    center = point,
+                                )
+                            }
                         }
                     }
+                }
+                if (points.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.phase_history_empty),
+                        color = OnNightMuted,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 12.dp),
+                    )
                 }
             }
             Spacer(Modifier.height(10.dp))

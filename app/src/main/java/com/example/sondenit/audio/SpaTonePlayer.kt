@@ -11,7 +11,7 @@ class SpaTonePlayer {
     private var running = false
 
     @Volatile
-    private var targetVolume = 0.1f
+    private var targetVolume = 0.018f
 
     private var thread: Thread? = null
     private var audioTrack: AudioTrack? = null
@@ -26,7 +26,7 @@ class SpaTonePlayer {
     }
 
     fun setBreathLevel(level: Float) {
-        targetVolume = 0.06f + level.coerceIn(0f, 1f) * 0.18f
+        targetVolume = 0.018f + level.coerceIn(0f, 1f) * 0.052f
     }
 
     fun stop() {
@@ -68,20 +68,20 @@ class SpaTonePlayer {
         var phaseC = 0.0
         var lfo = 0.0
         var volume = 0.0f
-        val stepA = 2.0 * PI * 220.0 / sampleRate
-        val stepB = 2.0 * PI * 277.18 / sampleRate
-        val stepC = 2.0 * PI * 329.63 / sampleRate
-        val lfoStep = 2.0 * PI * 0.08 / sampleRate
+        val stepA = 2.0 * PI * 174.61 / sampleRate
+        val stepB = 2.0 * PI * 261.63 / sampleRate
+        val stepC = 2.0 * PI * 349.23 / sampleRate
+        val lfoStep = 2.0 * PI * 0.025 / sampleRate
 
         track.play()
         while (running) {
             for (i in buffer.indices) {
-                volume += (targetVolume - volume) * 0.0015f
-                val shimmer = 0.75 + 0.25 * sin(lfo)
+                volume += (targetVolume - volume) * 0.00006f
+                val shimmer = 0.92 + 0.08 * sin(lfo)
                 val sample = (
-                    sin(phaseA) * 0.42 +
-                        sin(phaseB) * 0.31 +
-                        sin(phaseC) * 0.18
+                    sin(phaseA) * 0.48 +
+                        sin(phaseB) * 0.24 +
+                        sin(phaseC) * 0.12
                     ) * shimmer * volume
                 buffer[i] = (sample.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
                 phaseA += stepA
@@ -99,8 +99,8 @@ class SpaTonePlayer {
         targetVolume = 0f
         repeat(2) {
             for (i in buffer.indices) {
-                volume *= 0.997f
-                val sample = (sin(phaseA) * 0.5 + sin(phaseB) * 0.3) * volume
+                volume *= 0.9993f
+                val sample = (sin(phaseA) * 0.48 + sin(phaseB) * 0.24) * volume
                 buffer[i] = (sample.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
                 phaseA += stepA
                 phaseB += stepB

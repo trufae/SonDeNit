@@ -1,7 +1,7 @@
 package com.example.sondenit.ui.screens
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -55,9 +55,10 @@ import com.example.sondenit.ui.theme.OnNightMuted
 import kotlinx.coroutines.delay
 
 private const val BreathCycles = 6
-private const val InhaleMillis = 4_000
-private const val HoldMillis = 2_000
-private const val ExhaleMillis = 6_000
+private const val InhaleMillis = 5_000
+private const val HoldMillis = 4_000
+private const val ExhaleMillis = 7_000
+private val BreathEasing = CubicBezierEasing(0.37f, 0f, 0.63f, 1f)
 
 private enum class BreathPhase {
     Inhale,
@@ -106,14 +107,14 @@ fun BreathingScreen(
             phase = BreathPhase.Inhale
             circleProgress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(InhaleMillis, easing = LinearEasing),
+                animationSpec = tween(InhaleMillis, easing = BreathEasing),
             )
             phase = BreathPhase.Hold
             delay(HoldMillis.toLong())
             phase = BreathPhase.Exhale
             circleProgress.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(ExhaleMillis, easing = LinearEasing),
+                animationSpec = tween(ExhaleMillis, easing = BreathEasing),
             )
         }
         complete = true
