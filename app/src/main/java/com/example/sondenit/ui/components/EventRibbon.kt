@@ -1,6 +1,9 @@
 package com.example.sondenit.ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,9 +20,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.sondenit.audio.NoiseGroup
+import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightSurface
 import com.example.sondenit.ui.theme.OnNight
 import com.example.sondenit.ui.theme.OnNightMuted
@@ -42,6 +47,8 @@ fun EventRibbon(
     pausedRanges: List<LongRange>,
     modifier: Modifier = Modifier,
     title: String,
+    playheadTimestamp: Long? = null,
+    onSeekTimestamp: ((Long) -> Unit)? = null,
 ) {
     val total = (sessionEnd - sessionStart).coerceAtLeast(1L)
 
@@ -56,7 +63,30 @@ fun EventRibbon(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(40.dp),
+                .height(40.dp)
+                .then(
+                    if (onSeekTimestamp == null) Modifier else Modifier.pointerInput(
+                        sessionStart,
+                        sessionEnd,
+                        onSeekTimestamp,
+                    ) {
+                        fun seekAt(x: Float) {
+                            val width = size.width.coerceAtLeast(1)
+                            val fraction = (x / width).coerceIn(0f, 1f)
+                            onSeekTimestamp(
+                                sessionStart + (fraction * total).toLong(),
+                            )
+                        }
+
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            seekAt(down.position.x)
+                            drag(down.id) { change ->
+                                seekAt(change.position.x)
+                            }
+                        }
+                    },
+                ),
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val w = size.width
@@ -100,6 +130,20 @@ fun EventRibbon(
                         start = Offset(x, 0f),
                         end = Offset(x, h),
                         strokeWidth = 2.5f,
+                    )
+                }
+                playheadTimestamp?.let { ts ->
+                    val x = ((ts - sessionStart).coerceIn(0, total)).toFloat() / total * w
+                    drawLine(
+                        color = MoonGlow,
+                        start = Offset(x, 0f),
+                        end = Offset(x, h),
+                        strokeWidth = 4f,
+                    )
+                    drawCircle(
+                        color = MoonGlow,
+                        radius = 6f,
+                        center = Offset(x, h / 2f),
                     )
                 }
             }

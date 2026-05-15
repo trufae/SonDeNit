@@ -68,6 +68,10 @@
     <string name="ambient_avg">Soroll ambient mitjà</string>
     <string name="timeline">Línia del temps</string>
     <string name="play_chunk">Reprodueix</string>
+    <string name="play_all_audio">Reprodueix tots els sons</string>
+    <string name="now_playing_audio_time">Ara sona l\'enregistrament de les %1$s</string>
+    <string name="audio_recording_count">%1$d sons enregistrats</string>
+    <string name="no_audio_recorded">No hi ha sons enregistrats</string>
     <string name="stop_chunk">Atura</string>
     <string name="event_session_start">Inici de la sessió</string>
     <string name="event_session_end">Final de la sessió</string>

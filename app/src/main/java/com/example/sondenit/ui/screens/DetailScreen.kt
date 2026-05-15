@@ -1,6 +1,7 @@
 package com.example.sondenit.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,7 +18,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,7 +34,9 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -45,11 +50,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -90,8 +97,12 @@ import com.example.sondenit.ui.theme.SkyTeal
 import com.example.sondenit.util.formatDateLong
 import com.example.sondenit.util.formatDurationShort
 import com.example.sondenit.util.formatTimeOfDay
+import com.example.sondenit.util.formatTimeOfDayLong
 import java.io.File
+import kotlin.math.abs
 import kotlin.math.sqrt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 private const val GROUP_MIN_S = 0f
 private const val GROUP_MAX_S = 300f
@@ -100,6 +111,11 @@ private const val MIN_INT_MAX_S = 30f
 private val WIDE_BREAKPOINT = 600.dp
 private val SECTION_PAD = 20.dp
 private val TIMELINE_PAD = 14.dp
+
+private data class PlaybackState(
+    val file: String,
+    val timestamp: Long,
+)
 
 @Composable
 fun DetailScreen(
@@ -111,8 +127,10 @@ fun DetailScreen(
     onDelete: (SleepSession) -> Unit,
 ) {
     val player = remember { AudioPlayer() }
-    var playingFile by remember { mutableStateOf<String?>(null) }
+    var playback by remember { mutableStateOf<PlaybackState?>(null) }
+    var mapTimestamp by rememberSaveable(session.id) { mutableStateOf(session.startedAt) }
     val events = remember(session.id, session.endedAt) { repo.readEvents(session.id) }
+    val sessionDir = remember(session.id) { repo.sessionDir(session.id) }
 
     var renaming by rememberSaveable { mutableStateOf(false) }
     var editingNotes by rememberSaveable { mutableStateOf(false) }
@@ -137,7 +155,9 @@ fun DetailScreen(
             )
         }
     }
-    val audioChunks = remember(events) { events.filterIsInstance<SessionEvent.AudioChunk>() }
+    val audioChunks = remember(events) {
+        events.filterIsInstance<SessionEvent.AudioChunk>().sortedBy { it.timestamp }
+    }
     val groups by remember(audioChunks) {
         derivedStateOf { AudioGrouping.group(audioChunks, (groupSeconds * 1000f).toLong()) }
     }
@@ -157,18 +177,35 @@ fun DetailScreen(
 
     val sessionStart = session.startedAt
     val sessionEnd = session.endedAt ?: events.lastOrNull()?.timestamp ?: session.startedAt
+    val playheadTimestamp = playback?.timestamp ?: mapTimestamp
 
     val onPlayGroup: (NoiseGroup) -> Unit = { group ->
-        val first = group.chunks.first()
-        val file = File(repo.sessionDir(session.id), first.file)
-        if (file.exists()) {
-            playingFile = first.file
-            player.play(file) { playingFile = null }
-        }
+        playAudioChunks(
+            player = player,
+            sessionDir = sessionDir,
+            chunks = group.chunks,
+            onStarted = { chunk ->
+                playback = PlaybackState(chunk.file, chunk.timestamp)
+                mapTimestamp = chunk.timestamp
+            },
+            onFinished = { playback = null },
+        )
+    }
+    val onPlayAllAudio: () -> Unit = {
+        playAudioChunks(
+            player = player,
+            sessionDir = sessionDir,
+            chunks = audioChunks,
+            onStarted = { chunk ->
+                playback = PlaybackState(chunk.file, chunk.timestamp)
+                mapTimestamp = chunk.timestamp
+            },
+            onFinished = { playback = null },
+        )
     }
     val onStopPlayback: () -> Unit = {
         player.stop()
-        playingFile = null
+        playback = null
     }
 
     BoxWithConstraints(
@@ -199,9 +236,13 @@ fun DetailScreen(
                     pausedRanges = pausedRanges,
                     screenOnTimestamps = screenOnTimestamps,
                     labels = labels,
-                    playingFile = playingFile,
+                    playback = playback,
+                    playheadTimestamp = playheadTimestamp,
+                    audioChunks = audioChunks,
                     onPlayGroup = onPlayGroup,
+                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
+                    onMapSeek = { mapTimestamp = it },
                     groupSeconds = groupSeconds,
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
@@ -221,9 +262,13 @@ fun DetailScreen(
                     pausedRanges = pausedRanges,
                     screenOnTimestamps = screenOnTimestamps,
                     labels = labels,
-                    playingFile = playingFile,
+                    playback = playback,
+                    playheadTimestamp = playheadTimestamp,
+                    audioChunks = audioChunks,
                     onPlayGroup = onPlayGroup,
+                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
+                    onMapSeek = { mapTimestamp = it },
                     groupSeconds = groupSeconds,
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
@@ -243,9 +288,13 @@ fun DetailScreen(
                     pausedRanges = pausedRanges,
                     screenOnTimestamps = screenOnTimestamps,
                     labels = labels,
-                    playingFile = playingFile,
+                    playback = playback,
+                    playheadTimestamp = playheadTimestamp,
+                    audioChunks = audioChunks,
                     onPlayGroup = onPlayGroup,
+                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
+                    onMapSeek = { mapTimestamp = it },
                     groupSeconds = groupSeconds,
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
@@ -349,17 +398,33 @@ private fun CompactLayout(
     pausedRanges: List<LongRange>,
     screenOnTimestamps: List<Long>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
-    playingFile: String?,
+    playback: PlaybackState?,
+    playheadTimestamp: Long?,
+    audioChunks: List<SessionEvent.AudioChunk>,
     onPlayGroup: (NoiseGroup) -> Unit,
+    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
+    onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
     onGroupChange: (Float) -> Unit,
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val timelineHeaderIndex = compactTimelineHeaderIndex(stats.sleptDurationMs > 0)
+    LaunchedEffect(playback?.timestamp, timelineRows) {
+        playback?.timestamp?.let { ts ->
+            timelineListIndexForTimestamp(timelineHeaderIndex, timelineRows, ts)?.let { idx ->
+                listState.animateScrollToItem(idx)
+            }
+        }
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
     ) {
         item { SummaryCard(session, stats) }
@@ -374,6 +439,11 @@ private fun CompactLayout(
                     groups = significantGroups,
                     screenOnTimestamps = screenOnTimestamps,
                     pausedRanges = pausedRanges,
+                    playheadTimestamp = playheadTimestamp,
+                    onSeekTimestamp = { ts ->
+                        onMapSeek(ts)
+                        scrollTimelineTo(scope, listState, timelineHeaderIndex, timelineRows, ts)
+                    },
                     title = stringResource(R.string.event_ribbon),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
                 )
@@ -385,7 +455,15 @@ private fun CompactLayout(
             item { Spacer(Modifier.height(16.dp)); StatsGrid(stats) }
             item { Spacer(Modifier.height(16.dp)); SignalsCard(stats) }
         }
-        timelineSection(timelineRows, labels, playingFile, onPlayGroup, onStopPlayback)
+        timelineSection(
+            timelineRows = timelineRows,
+            labels = labels,
+            playback = playback,
+            audioChunks = audioChunks,
+            onPlayGroup = onPlayGroup,
+            onPlayAllAudio = onPlayAllAudio,
+            onStopPlayback = onStopPlayback,
+        )
     }
 }
 
@@ -400,17 +478,33 @@ private fun WidePortraitLayout(
     pausedRanges: List<LongRange>,
     screenOnTimestamps: List<Long>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
-    playingFile: String?,
+    playback: PlaybackState?,
+    playheadTimestamp: Long?,
+    audioChunks: List<SessionEvent.AudioChunk>,
     onPlayGroup: (NoiseGroup) -> Unit,
+    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
+    onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
     onGroupChange: (Float) -> Unit,
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val timelineHeaderIndex = widePortraitTimelineHeaderIndex(stats.sleptDurationMs > 0)
+    LaunchedEffect(playback?.timestamp, timelineRows) {
+        playback?.timestamp?.let { ts ->
+            timelineListIndexForTimestamp(timelineHeaderIndex, timelineRows, ts)?.let { idx ->
+                listState.animateScrollToItem(idx)
+            }
+        }
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
     ) {
         item { SummaryCard(session, stats) }
@@ -450,6 +544,11 @@ private fun WidePortraitLayout(
                     groups = significantGroups,
                     screenOnTimestamps = screenOnTimestamps,
                     pausedRanges = pausedRanges,
+                    playheadTimestamp = playheadTimestamp,
+                    onSeekTimestamp = { ts ->
+                        onMapSeek(ts)
+                        scrollTimelineTo(scope, listState, timelineHeaderIndex, timelineRows, ts)
+                    },
                     title = stringResource(R.string.event_ribbon),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
                 )
@@ -459,7 +558,15 @@ private fun WidePortraitLayout(
                 AnalysisSliders(groupSeconds, onGroupChange, minIntSeconds, onMinIntChange)
             }
         }
-        timelineSection(timelineRows, labels, playingFile, onPlayGroup, onStopPlayback)
+        timelineSection(
+            timelineRows = timelineRows,
+            labels = labels,
+            playback = playback,
+            audioChunks = audioChunks,
+            onPlayGroup = onPlayGroup,
+            onPlayAllAudio = onPlayAllAudio,
+            onStopPlayback = onStopPlayback,
+        )
     }
 }
 
@@ -474,15 +581,29 @@ private fun SplitLayout(
     pausedRanges: List<LongRange>,
     screenOnTimestamps: List<Long>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
-    playingFile: String?,
+    playback: PlaybackState?,
+    playheadTimestamp: Long?,
+    audioChunks: List<SessionEvent.AudioChunk>,
     onPlayGroup: (NoiseGroup) -> Unit,
+    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
+    onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
     onGroupChange: (Float) -> Unit,
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
 ) {
+    val timelineState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(playback?.timestamp, timelineRows) {
+        playback?.timestamp?.let { ts ->
+            timelineListIndexForTimestamp(0, timelineRows, ts)?.let { idx ->
+                timelineState.animateScrollToItem(idx)
+            }
+        }
+    }
+
     Row(modifier = Modifier.fillMaxSize()) {
         // Left half: stats / sliders / signals
         LazyColumn(
@@ -510,6 +631,11 @@ private fun SplitLayout(
                         groups = significantGroups,
                         screenOnTimestamps = screenOnTimestamps,
                         pausedRanges = pausedRanges,
+                        playheadTimestamp = playheadTimestamp,
+                        onSeekTimestamp = { ts ->
+                            onMapSeek(ts)
+                            scrollTimelineTo(scope, timelineState, 0, timelineRows, ts)
+                        },
                         title = stringResource(R.string.event_ribbon),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
                     )
@@ -534,9 +660,18 @@ private fun SplitLayout(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
+            state = timelineState,
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
         ) {
-            timelineSection(timelineRows, labels, playingFile, onPlayGroup, onStopPlayback)
+            timelineSection(
+                timelineRows = timelineRows,
+                labels = labels,
+                playback = playback,
+                audioChunks = audioChunks,
+                onPlayGroup = onPlayGroup,
+                onPlayAllAudio = onPlayAllAudio,
+                onStopPlayback = onStopPlayback,
+            )
         }
     }
 }
@@ -546,8 +681,10 @@ private fun SplitLayout(
 private fun LazyListScope.timelineSection(
     timelineRows: List<TimelineRowData>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
-    playingFile: String?,
+    playback: PlaybackState?,
+    audioChunks: List<SessionEvent.AudioChunk>,
     onPlayGroup: (NoiseGroup) -> Unit,
+    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
 ) {
     item {
@@ -560,6 +697,16 @@ private fun LazyListScope.timelineSection(
             modifier = Modifier.padding(horizontal = SECTION_PAD),
         )
         Spacer(Modifier.height(4.dp))
+    }
+    item {
+        TimelinePlaybackControl(
+            audioCount = audioChunks.size,
+            currentTimestamp = playback?.timestamp,
+            isPlaying = playback != null,
+            onPlayAll = onPlayAllAudio,
+            onStop = onStopPlayback,
+        )
+        Spacer(Modifier.height(8.dp))
     }
     items(timelineRows.size) { idx ->
         val row = timelineRows[idx]
@@ -574,16 +721,84 @@ private fun LazyListScope.timelineSection(
                     showLineBelow = idx < timelineRows.size - 1,
                 )
                 is TimelineRowData.Group -> {
-                    val isPlayable = row.group.chunks.first().file
+                    val isPlaying = playback?.file?.let { file ->
+                        row.group.chunks.any { it.file == file }
+                    } == true
                     TimelineRow(
                         spec = describeGroup(row.group)
-                            .copy(playing = playingFile == isPlayable),
+                            .copy(playing = isPlaying),
                         showLineAbove = idx > 0,
                         showLineBelow = idx < timelineRows.size - 1,
                         onPlay = { onPlayGroup(row.group) },
                         onStop = onStopPlayback,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelinePlaybackControl(
+    audioCount: Int,
+    currentTimestamp: Long?,
+    isPlaying: Boolean,
+    onPlayAll: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val enabled = audioCount > 0
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TIMELINE_PAD, vertical = 4.dp),
+        color = NightSurface,
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val accent = if (enabled) MoonGlow else OnNightMuted
+            Box(
+                modifier = Modifier
+                    .size(58.dp)
+                    .background(accent.copy(alpha = if (enabled) 0.95f else 0.25f), RoundedCornerShape(50))
+                    .clickable(enabled = enabled) {
+                        if (isPlaying) onStop() else onPlayAll()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying)
+                        stringResource(R.string.stop_chunk)
+                    else stringResource(R.string.play_all_audio),
+                    tint = NightDeep,
+                    modifier = Modifier.size(34.dp),
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.play_all_audio),
+                    color = OnNight,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = when {
+                        currentTimestamp != null -> stringResource(
+                            R.string.now_playing_audio_time,
+                            formatTimeOfDayLong(currentTimestamp),
+                        )
+                        enabled -> stringResource(R.string.audio_recording_count, audioCount)
+                        else -> stringResource(R.string.no_audio_recorded)
+                    },
+                    color = if (currentTimestamp != null) MoonGlow else OnNightMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
     }
@@ -612,6 +827,71 @@ private fun buildTimelineRows(
     for (g in groups) rows.add(TimelineRowData.Group(g))
     rows.sortBy { it.timestamp }
     return rows
+}
+
+private fun playAudioChunks(
+    player: AudioPlayer,
+    sessionDir: File,
+    chunks: List<SessionEvent.AudioChunk>,
+    onStarted: (SessionEvent.AudioChunk) -> Unit,
+    onFinished: () -> Unit,
+) {
+    player.stop()
+
+    fun playAt(index: Int) {
+        if (index >= chunks.size) {
+            onFinished()
+            return
+        }
+
+        val chunk = chunks[index]
+        val file = File(sessionDir, chunk.file)
+        if (!file.exists()) {
+            playAt(index + 1)
+            return
+        }
+
+        runCatching {
+            player.play(file) { playAt(index + 1) }
+        }.onSuccess {
+            onStarted(chunk)
+        }.onFailure {
+            playAt(index + 1)
+        }
+    }
+
+    playAt(0)
+}
+
+private fun compactTimelineHeaderIndex(showStats: Boolean): Int =
+    2 + if (showStats) 5 else 0
+
+private fun widePortraitTimelineHeaderIndex(showStats: Boolean): Int =
+    2 + if (showStats) 3 else 0
+
+private fun scrollTimelineTo(
+    scope: CoroutineScope,
+    state: LazyListState,
+    timelineHeaderIndex: Int,
+    timelineRows: List<TimelineRowData>,
+    timestamp: Long,
+) {
+    val index = timelineListIndexForTimestamp(timelineHeaderIndex, timelineRows, timestamp) ?: return
+    scope.launch {
+        state.animateScrollToItem(index)
+    }
+}
+
+private fun timelineListIndexForTimestamp(
+    timelineHeaderIndex: Int,
+    timelineRows: List<TimelineRowData>,
+    timestamp: Long,
+): Int? {
+    if (timelineRows.isEmpty()) return null
+    val nearest = timelineRows.withIndex().minByOrNull { (_, row) ->
+        abs(row.timestamp - timestamp)
+    }?.index ?: return null
+    return timelineHeaderIndex + 2 + nearest
 }
 
 private fun computePausedRanges(events: List<SessionEvent>): List<LongRange> {

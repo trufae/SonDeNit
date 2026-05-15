@@ -214,7 +214,8 @@ fun TimelineRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = if (spec.playing) spec.accent.copy(alpha = 0.22f)
+                else MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(14.dp),
         ) {
             Row(
@@ -265,4 +266,3 @@ fun TimelineRow(
         }
     }
 }
-
