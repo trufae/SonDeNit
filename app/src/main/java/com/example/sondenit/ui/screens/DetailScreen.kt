@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -32,6 +33,8 @@ import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -104,6 +107,7 @@ fun DetailScreen(
     session: SleepSession,
     onBack: () -> Unit,
     onRename: (SleepSession, String) -> Unit,
+    onUpdateNotes: (SleepSession, String) -> Unit,
     onDelete: (SleepSession) -> Unit,
 ) {
     val player = remember { AudioPlayer() }
@@ -111,8 +115,10 @@ fun DetailScreen(
     val events = remember(session.id, session.endedAt) { repo.readEvents(session.id) }
 
     var renaming by rememberSaveable { mutableStateOf(false) }
+    var editingNotes by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var newName by rememberSaveable(session.id) { mutableStateOf(session.displayName) }
+    var notesDraft by rememberSaveable(session.id) { mutableStateOf(session.notes) }
 
     var groupSeconds by rememberSaveable(session.id) {
         mutableFloatStateOf(SessionStats.DEFAULT_GROUPING_WINDOW_MS / 1000f)
@@ -200,6 +206,10 @@ fun DetailScreen(
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
                     onMinIntChange = { minIntSeconds = it },
+                    onEditNotes = {
+                        notesDraft = session.notes
+                        editingNotes = true
+                    },
                 )
                 isWide -> WidePortraitLayout(
                     session = session,
@@ -218,6 +228,10 @@ fun DetailScreen(
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
                     onMinIntChange = { minIntSeconds = it },
+                    onEditNotes = {
+                        notesDraft = session.notes
+                        editingNotes = true
+                    },
                 )
                 else -> CompactLayout(
                     session = session,
@@ -236,6 +250,10 @@ fun DetailScreen(
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
                     onMinIntChange = { minIntSeconds = it },
+                    onEditNotes = {
+                        notesDraft = session.notes
+                        editingNotes = true
+                    },
                 )
             }
         }
@@ -262,6 +280,32 @@ fun DetailScreen(
             },
             dismissButton = {
                 TextButton(onClick = { renaming = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
+    }
+    if (editingNotes) {
+        AlertDialog(
+            onDismissRequest = { editingNotes = false },
+            title = { Text(stringResource(R.string.comments_dialog_title)) },
+            text = {
+                OutlinedTextField(
+                    value = notesDraft,
+                    onValueChange = { notesDraft = it },
+                    label = { Text(stringResource(R.string.comments_field_label)) },
+                    minLines = 5,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onUpdateNotes(session, notesDraft.trim())
+                    editingNotes = false
+                }) { Text(stringResource(R.string.rename_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingNotes = false }) {
                     Text(stringResource(R.string.cancel))
                 }
             },
@@ -312,12 +356,14 @@ private fun CompactLayout(
     onGroupChange: (Float) -> Unit,
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
+    onEditNotes: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
     ) {
         item { SummaryCard(session, stats) }
+        item { CommentsSection(session.notes, onEditNotes) }
         if (stats.sleptDurationMs > 0) {
             item { Spacer(Modifier.height(16.dp)); PhasesSection(stats, legendBelow = true) }
             item {
@@ -361,12 +407,14 @@ private fun WidePortraitLayout(
     onGroupChange: (Float) -> Unit,
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
+    onEditNotes: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
     ) {
         item { SummaryCard(session, stats) }
+        item { CommentsSection(session.notes, onEditNotes) }
         if (stats.sleptDurationMs > 0) {
             item {
                 Spacer(Modifier.height(16.dp))
@@ -433,6 +481,7 @@ private fun SplitLayout(
     onGroupChange: (Float) -> Unit,
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
+    onEditNotes: () -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxSize()) {
         // Left half: stats / sliders / signals
@@ -443,6 +492,7 @@ private fun SplitLayout(
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
         ) {
             item { SummaryCard(session, stats) }
+            item { CommentsSection(session.notes, onEditNotes) }
             if (stats.sleptDurationMs > 0) {
                 item {
                     Spacer(Modifier.height(16.dp))
@@ -831,6 +881,54 @@ private fun SummaryCard(session: SleepSession, stats: SessionStats) {
             )
             Spacer(Modifier.height(14.dp))
             QualityBadge(score = stats.qualityScore)
+        }
+    }
+}
+
+@Composable
+private fun CommentsSection(notes: String, onEditNotes: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = SECTION_PAD),
+    ) {
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = onEditNotes,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MoonGlow,
+                contentColor = NightDeep,
+            ),
+            shape = RoundedCornerShape(16.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Notes,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.comments),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        val trimmed = notes.trim()
+        if (trimmed.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                color = NightSurface.copy(alpha = 0.72f),
+            ) {
+                Text(
+                    text = trimmed,
+                    color = OnNight,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
         }
     }
 }

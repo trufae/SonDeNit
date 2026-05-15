@@ -213,6 +213,10 @@ private fun AppRoot() {
                             repo.rename(sess.id, newName)
                             sessions = repo.listSessions()
                         },
+                        onUpdateNotes = { sess, notes ->
+                            repo.updateNotes(sess.id, notes)
+                            sessions = repo.listSessions()
+                        },
                         onDelete = { sess ->
                             repo.delete(sess.id)
                             sessions = repo.listSessions()

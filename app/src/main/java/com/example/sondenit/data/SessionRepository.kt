@@ -74,6 +74,11 @@ class SessionRepository(context: Context) {
         writeMeta(s.copy(displayName = newName))
     }
 
+    fun updateNotes(id: String, notes: String) {
+        val s = readSession(id) ?: return
+        writeMeta(s.copy(notes = notes))
+    }
+
     fun finish(id: String, endedAt: Long) {
         val s = readSession(id) ?: return
         writeMeta(s.copy(endedAt = endedAt))
@@ -135,6 +140,6 @@ class SessionRepository(context: Context) {
         private const val AUDIO_DIR = "audio"
 
         private val ID_FORMAT = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
-        private val DISPLAY_FORMAT = SimpleDateFormat("EEEE d 'de' MMMM", Locale("ca"))
+        private val DISPLAY_FORMAT = SimpleDateFormat("EEEE d MMMM", Locale.forLanguageTag("ca"))
     }
 }

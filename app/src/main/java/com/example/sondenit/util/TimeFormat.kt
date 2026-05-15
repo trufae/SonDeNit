@@ -4,9 +4,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val TIME_OF_DAY = SimpleDateFormat("HH:mm", Locale("ca"))
-private val TIME_OF_DAY_LONG = SimpleDateFormat("HH:mm:ss", Locale("ca"))
-private val DATE_LONG = SimpleDateFormat("EEEE d 'de' MMMM yyyy", Locale("ca"))
+private val CA_LOCALE = Locale.forLanguageTag("ca")
+private val TIME_OF_DAY = SimpleDateFormat("HH:mm", CA_LOCALE)
+private val TIME_OF_DAY_LONG = SimpleDateFormat("HH:mm:ss", CA_LOCALE)
+private val DATE_LONG = SimpleDateFormat("EEEE d MMMM yyyy", CA_LOCALE)
 
 fun formatDurationShort(ms: Long): String {
     if (ms <= 0) return "0 min"
