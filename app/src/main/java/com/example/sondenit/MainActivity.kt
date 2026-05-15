@@ -49,6 +49,7 @@ import com.example.sondenit.data.SleepSession
 import com.example.sondenit.audio.AudioSettings
 import com.example.sondenit.service.RecordingController
 import com.example.sondenit.service.RecordingState
+import com.example.sondenit.ui.screens.BreathingScreen
 import com.example.sondenit.ui.screens.DetailScreen
 import com.example.sondenit.ui.screens.HomeScreen
 import com.example.sondenit.ui.screens.RecordingScreen
@@ -74,6 +75,7 @@ class MainActivity : ComponentActivity() {
 
 private sealed class Screen {
     object Home : Screen()
+    object Breathing : Screen()
     object Recording : Screen()
     object Settings : Screen()
     data class Detail(val sessionId: String) : Screen()
@@ -168,6 +170,7 @@ private fun AppRoot() {
                                 sessions = repo.listSessions()
                             }
                         },
+                        onOpenBreathing = { screen = Screen.Breathing },
                         onOpenSession = { sess ->
                             screen = if (sess.endedAt == null) Screen.Recording
                                      else Screen.Detail(sess.id)
@@ -183,6 +186,11 @@ private fun AppRoot() {
                         },
                     )
                 }
+            }
+            Screen.Breathing -> {
+                BreathingScreen(
+                    onClose = { screen = Screen.Home },
+                )
             }
             Screen.Settings -> {
                 SettingsScreen(
@@ -324,6 +332,7 @@ private val ScreenSaver = androidx.compose.runtime.saveable.Saver<Screen, String
     save = { screen ->
         when (screen) {
             Screen.Home -> "home"
+            Screen.Breathing -> "breathing"
             Screen.Recording -> "rec"
             Screen.Settings -> "settings"
             is Screen.Detail -> "detail:${screen.sessionId}"
@@ -332,6 +341,7 @@ private val ScreenSaver = androidx.compose.runtime.saveable.Saver<Screen, String
     restore = { value ->
         when {
             value == "home" -> Screen.Home
+            value == "breathing" -> Screen.Breathing
             value == "rec" -> Screen.Recording
             value == "settings" -> Screen.Settings
             value.startsWith("detail:") -> Screen.Detail(value.removePrefix("detail:"))

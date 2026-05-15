@@ -6,8 +6,23 @@
     <string name="home_subtitle">El teu seguiment del son</string>
     <string name="start_sleep">Comença a dormir</string>
     <string name="continue_sleep">Continua la sessió</string>
+    <string name="breathing_button">Respira</string>
     <string name="no_sessions">Encara no hi ha sessions enregistrades.\nQuan vagis a dormir, prem el botó de dalt.</string>
     <string name="past_sessions">Sessions anteriors</string>
+
+    <!-- Exercici de respiració -->
+    <string name="breathing_title">Respira</string>
+    <string name="breathing_guidance">Inspira suaument pel nas, aguanta poc temps i expira més a poc a poc. Repeteix-ho sense forçar.</string>
+    <string name="breathing_inhale">Aspirar</string>
+    <string name="breathing_hold">aguanta l\'aire</string>
+    <string name="breathing_exhale">expirar</string>
+    <string name="breathing_cycle_count">Cicle %1$d de %2$d</string>
+    <string name="breathing_safety_note">Si notes mareig, falta d\'aire, dolor o incomoditat, interromp l\'exercici i respira amb normalitat.</string>
+    <string name="breathing_interrupt">Interromp l\'exercici</string>
+    <string name="breathing_done">Fet</string>
+    <string name="breathing_complete_message">Exercici completat. Respira amb normalitat i mantén el ritme tranquil.</string>
+    <string name="close">Tanca</string>
+    <string name="repeat_exercise">Repeteix</string>
 
     <!-- Configuració -->
     <string name="settings">Configuració</string>

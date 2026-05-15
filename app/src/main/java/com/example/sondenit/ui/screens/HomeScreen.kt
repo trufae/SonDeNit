@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Settings
@@ -73,6 +74,7 @@ fun HomeScreen(
     sessions: List<SleepSession>,
     activeSession: SleepSession?,
     onPrimaryAction: () -> Unit,
+    onOpenBreathing: () -> Unit,
     onOpenSession: (SleepSession) -> Unit,
     onOpenSettings: () -> Unit,
     onRename: (SleepSession, String) -> Unit,
@@ -118,6 +120,8 @@ fun HomeScreen(
             }
             item {
                 Spacer(Modifier.height(20.dp))
+                BreathingActionButton(onClick = onOpenBreathing)
+                Spacer(Modifier.height(12.dp))
                 PrimaryActionCard(
                     isResume = activeSession != null,
                     onClick = onPrimaryAction,
@@ -240,6 +244,39 @@ private fun Header(onOpenSettings: () -> Unit) {
                 imageVector = Icons.Filled.Settings,
                 contentDescription = stringResource(R.string.settings),
                 tint = OnNight,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BreathingActionButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = SkyTeal,
+            contentColor = NightDeep,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Air,
+                contentDescription = null,
+                modifier = Modifier.size(30.dp),
+            )
+            Spacer(Modifier.size(12.dp))
+            Text(
+                text = stringResource(R.string.breathing_button),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
             )
         }
     }
