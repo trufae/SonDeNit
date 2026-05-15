@@ -8,7 +8,7 @@
   <img alt="Android" src="https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white">
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white">
   <img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.2-6C63FF">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.3-6C63FF">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-yellow">
 </p>
 
@@ -95,7 +95,7 @@ make release
 The release target creates:
 
 ```text
-SonDeNit-0.2.apk
+SonDeNit-0.3.apk
 ```
 
 ## Permissions
