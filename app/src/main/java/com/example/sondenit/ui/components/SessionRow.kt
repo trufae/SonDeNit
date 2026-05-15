@@ -1,7 +1,9 @@
 package com.example.sondenit.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,13 +28,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.Icon
+import com.example.sondenit.data.SleepPhase
 import com.example.sondenit.data.SleepSession
+import com.example.sondenit.ui.theme.Lavender
 import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightSurface
 import com.example.sondenit.ui.theme.NightSurfaceHigh
 import com.example.sondenit.ui.theme.OnNight
 import com.example.sondenit.ui.theme.OnNightMuted
+import com.example.sondenit.ui.theme.PinkDawn
+import com.example.sondenit.ui.theme.SkyTeal
 import com.example.sondenit.util.formatDateLong
 import com.example.sondenit.util.formatDurationShort
 import com.example.sondenit.util.formatTimeOfDay
@@ -45,6 +48,7 @@ fun SessionRow(
     session: SleepSession,
     durationMs: Long?,
     qualityScore: Int?,
+    phaseDurations: Map<SleepPhase, Long>?,
     isActive: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -71,14 +75,11 @@ fun SessionRow(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(MoonGlow.copy(alpha = 0.18f)),
+                    .background(MoonGlow.copy(alpha = 0.12f))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Bedtime,
-                    contentDescription = null,
-                    tint = MoonGlow,
-                )
+                PhasePieIcon(phaseDurations)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
@@ -128,6 +129,40 @@ fun SessionRow(
         }
     }
 }
+
+@Composable
+private fun PhasePieIcon(phaseDurations: Map<SleepPhase, Long>?) {
+    val slices = listOf(
+        phaseDurations.orEmpty()[SleepPhase.DEEP].orZero() to Lavender,
+        phaseDurations.orEmpty()[SleepPhase.REM].orZero() to MoonGlow,
+        phaseDurations.orEmpty()[SleepPhase.LIGHT].orZero() to SkyTeal,
+        phaseDurations.orEmpty()[SleepPhase.AWAKE].orZero() to PinkDawn,
+    )
+    val total = slices.sumOf { it.first }.coerceAtLeast(0L)
+
+    Canvas(modifier = Modifier.size(36.dp)) {
+        drawCircle(color = Color.White.copy(alpha = 0.08f))
+        if (total <= 0L) {
+            return@Canvas
+        }
+
+        var startAngle = -90f
+        slices.forEach { (duration, color) ->
+            if (duration <= 0L) return@forEach
+            val sweep = duration.toFloat() / total.toFloat() * 360f
+            drawArc(
+                color = color,
+                startAngle = startAngle,
+                sweepAngle = sweep,
+                useCenter = true,
+            )
+            startAngle += sweep
+        }
+        drawCircle(color = Color.White.copy(alpha = 0.14f), radius = 1.5.dp.toPx())
+    }
+}
+
+private fun Long?.orZero(): Long = this ?: 0L
 
 @Composable
 private fun QualityBadge(score: Int) {

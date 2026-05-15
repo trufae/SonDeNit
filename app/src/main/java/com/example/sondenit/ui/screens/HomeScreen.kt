@@ -148,13 +148,14 @@ fun HomeScreen(
                 }
                 items(sessions, key = { it.id }) { session ->
                     val durationMs = session.endedAt?.let { it - session.startedAt }
-                    val score = remember(session.id, session.endedAt) {
-                        if (session.endedAt == null) null else repo.readStats(session.id)?.qualityScore
+                    val stats = remember(session.id, session.endedAt) {
+                        if (session.endedAt == null) null else repo.readStats(session.id)
                     }
                     SessionRow(
                         session = session,
                         durationMs = durationMs,
-                        qualityScore = score,
+                        qualityScore = stats?.qualityScore,
+                        phaseDurations = stats?.phaseDurations,
                         isActive = activeSession?.id == session.id,
                         onClick = { onOpenSession(session) },
                         onLongClick = {

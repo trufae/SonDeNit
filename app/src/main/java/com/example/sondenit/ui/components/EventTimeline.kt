@@ -37,9 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.sondenit.R
 import androidx.compose.foundation.layout.IntrinsicSize
 import com.example.sondenit.audio.NoiseGroup
 import com.example.sondenit.data.SessionEvent
@@ -267,7 +269,7 @@ fun TimelineRow(
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = "Favorit",
+                                text = stringResource(R.string.favorite_badge),
                                 color = MoonGlow,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,

@@ -117,6 +117,7 @@
     <string name="recording_actions_title">Edita l\'enregistrament</string>
     <string name="recording_group_actions_title">Edita %1$d enregistraments</string>
     <string name="mark_as_favorite">Marcar com favorit</string>
+    <string name="favorite_badge">Favorit</string>
     <string name="delete_recording">Eliminar</string>
     <string name="change_sound_type">Canviar el tipus (veu, roncs, gat, gos...)</string>
     <string name="change_sound_type_title">Canviar el tipus</string>
