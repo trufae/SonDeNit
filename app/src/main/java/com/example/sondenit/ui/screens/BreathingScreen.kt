@@ -1,6 +1,6 @@
 package com.example.sondenit.ui.screens
 
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -29,12 +29,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,12 +53,13 @@ import com.example.sondenit.audio.SpaTonePlayer
 import com.example.sondenit.ui.theme.NightDeep
 import com.example.sondenit.ui.theme.OnNight
 import com.example.sondenit.ui.theme.OnNightMuted
-import kotlinx.coroutines.delay
 
 private const val BreathCycles = 6
 private const val InhaleMillis = 5_000
 private const val HoldMillis = 4_000
 private const val ExhaleMillis = 7_000
+private const val CycleMillis = InhaleMillis + HoldMillis + ExhaleMillis
+private const val TotalExerciseMillis = BreathCycles * CycleMillis
 private val BreathEasing = CubicBezierEasing(0.37f, 0f, 0.63f, 1f)
 
 private enum class BreathPhase {
@@ -66,13 +68,33 @@ private enum class BreathPhase {
     Exhale,
 }
 
+private suspend fun runBreathAnimation(
+    durationMillis: Int,
+    onProgress: (elapsedMillis: Int, linearProgress: Float, easedProgress: Float) -> Unit,
+) {
+    onProgress(0, 0f, 0f)
+    val startNanos = withFrameNanos { it }
+    while (true) {
+        val frameNanos = withFrameNanos { it }
+        val elapsedMillis = ((frameNanos - startNanos) / 1_000_000L)
+            .coerceIn(0L, durationMillis.toLong())
+            .toInt()
+        val linearProgress = (elapsedMillis.toFloat() / durationMillis).coerceIn(0f, 1f)
+        onProgress(elapsedMillis, linearProgress, BreathEasing.transform(linearProgress))
+        if (linearProgress >= 1f) break
+    }
+}
+
 @Composable
 fun BreathingScreen(
     onClose: () -> Unit,
 ) {
-    val circleProgress = remember { Animatable(0f) }
     val player = remember { SpaTonePlayer() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    var circleProgress by remember { mutableFloatStateOf(0f) }
+    var phaseProgress by remember { mutableFloatStateOf(0f) }
+    var phaseElapsedMillis by remember { mutableIntStateOf(0) }
+    var totalElapsedMillis by remember { mutableIntStateOf(0) }
     var phase by remember { mutableStateOf(BreathPhase.Inhale) }
     var cycle by remember { mutableIntStateOf(1) }
     var complete by remember { mutableStateOf(false) }
@@ -94,30 +116,52 @@ fun BreathingScreen(
         }
     }
 
-    LaunchedEffect(player, circleProgress) {
-        snapshotFlow { circleProgress.value }
-            .collect { progress -> player.setBreathLevel(progress) }
-    }
-
     LaunchedEffect(runId) {
+        fun setBreathProgress(progress: Float) {
+            circleProgress = progress.coerceIn(0f, 1f)
+            player.setBreathLevel(circleProgress)
+        }
+
+        fun setTimedProgress(phaseStartMillis: Int, elapsedMillis: Int, progress: Float) {
+            phaseElapsedMillis = elapsedMillis
+            phaseProgress = progress.coerceIn(0f, 1f)
+            totalElapsedMillis = (phaseStartMillis + elapsedMillis)
+                .coerceIn(0, TotalExerciseMillis)
+        }
+
         complete = false
-        circleProgress.snapTo(0f)
+        setBreathProgress(0f)
+        setTimedProgress(0, 0, 0f)
         repeat(BreathCycles) { index ->
             cycle = index + 1
+            val cycleStartMillis = index * CycleMillis
+
             phase = BreathPhase.Inhale
-            circleProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(InhaleMillis, easing = BreathEasing),
-            )
+            runBreathAnimation(InhaleMillis) { elapsedMillis, linearProgress, easedProgress ->
+                setTimedProgress(cycleStartMillis, elapsedMillis, linearProgress)
+                setBreathProgress(easedProgress)
+            }
+
             phase = BreathPhase.Hold
-            delay(HoldMillis.toLong())
+            setBreathProgress(1f)
+            runBreathAnimation(HoldMillis) { elapsedMillis, linearProgress, _ ->
+                setTimedProgress(cycleStartMillis + InhaleMillis, elapsedMillis, linearProgress)
+                setBreathProgress(1f)
+            }
+
             phase = BreathPhase.Exhale
-            circleProgress.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(ExhaleMillis, easing = BreathEasing),
-            )
+            runBreathAnimation(ExhaleMillis) { elapsedMillis, linearProgress, easedProgress ->
+                setTimedProgress(
+                    cycleStartMillis + InhaleMillis + HoldMillis,
+                    elapsedMillis,
+                    linearProgress,
+                )
+                setBreathProgress(1f - easedProgress)
+            }
         }
         complete = true
+        setBreathProgress(0f)
+        setTimedProgress(TotalExerciseMillis, 0, 1f)
         player.setBreathLevel(0.15f)
     }
 
@@ -169,7 +213,7 @@ fun BreathingScreen(
             }
 
             BreathingCircle(
-                progress = circleProgress.value,
+                progress = circleProgress,
                 phase = phase,
                 cycle = cycle,
                 complete = complete,
@@ -181,12 +225,12 @@ fun BreathingScreen(
                     onRepeat = { runId++ },
                 )
             } else {
-                Text(
-                    text = stringResource(R.string.breathing_safety_note),
-                    color = OnNightMuted,
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp),
+                BreathingProgress(
+                    phase = phase,
+                    phaseProgress = phaseProgress,
+                    phaseElapsedMillis = phaseElapsedMillis,
+                    totalProgress = totalElapsedMillis.toFloat() / TotalExerciseMillis,
+                    totalElapsedMillis = totalElapsedMillis,
                 )
             }
         }
@@ -201,6 +245,11 @@ private fun BreathingCircle(
     complete: Boolean,
 ) {
     val circleSize = 156.dp + 132.dp * progress
+    val phaseColor by animateColorAsState(
+        targetValue = phaseColor(phase),
+        animationSpec = tween(durationMillis = 450),
+        label = "breathingPhaseColor",
+    )
     val phaseText = when {
         complete -> stringResource(R.string.breathing_done)
         phase == BreathPhase.Inhale -> stringResource(R.string.breathing_inhale)
@@ -221,9 +270,9 @@ private fun BreathingCircle(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFB7E7FF),
-                            Color(0xFF3A9FEF),
-                            Color(0xFF0D4FA5),
+                            Color.White.copy(alpha = 0.96f),
+                            phaseColor,
+                            phaseColor.copy(alpha = 0.48f),
                         )
                     )
                 ),
@@ -245,6 +294,121 @@ private fun BreathingCircle(
         }
     }
 }
+
+@Composable
+private fun BreathingProgress(
+    phase: BreathPhase,
+    phaseProgress: Float,
+    phaseElapsedMillis: Int,
+    totalProgress: Float,
+    totalElapsedMillis: Int,
+) {
+    val phaseDurationMillis = phase.durationMillis
+    val phaseElapsedSeconds = phaseElapsedMillis.toDisplaySeconds()
+    val phaseRemainingSeconds = ((phaseDurationMillis - phaseElapsedMillis).coerceAtLeast(0))
+        .toDisplaySeconds()
+    val totalRemainingSeconds = ((TotalExerciseMillis - totalElapsedMillis).coerceAtLeast(0))
+        .toDisplaySeconds()
+    val accent by animateColorAsState(
+        targetValue = phaseColor(phase),
+        animationSpec = tween(durationMillis = 450),
+        label = "breathingProgressColor",
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ProgressLabelRow(
+            start = stringResource(
+                R.string.breathing_step_seconds,
+                phaseElapsedSeconds,
+                phaseRemainingSeconds,
+            ),
+            end = stringResource(R.string.breathing_total_left, totalRemainingSeconds),
+        )
+        BreathingProgressBar(
+            progress = phaseProgress,
+            color = accent,
+        )
+        BreathingProgressBar(
+            progress = totalProgress.coerceIn(0f, 1f),
+            color = OnNight,
+            trackColor = Color.White.copy(alpha = 0.10f),
+            modifier = Modifier.height(5.dp),
+        )
+        Text(
+            text = stringResource(R.string.breathing_safety_note),
+            color = OnNightMuted,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun ProgressLabelRow(
+    start: String,
+    end: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = start,
+            color = OnNight,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = end,
+            color = OnNightMuted,
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.End,
+        )
+    }
+}
+
+@Composable
+private fun BreathingProgressBar(
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier.height(8.dp),
+    trackColor: Color = Color.White.copy(alpha = 0.16f),
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .background(trackColor),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .height(8.dp)
+                .clip(RoundedCornerShape(50))
+                .background(color),
+        )
+    }
+}
+
+private val BreathPhase.durationMillis: Int
+    get() = when (this) {
+        BreathPhase.Inhale -> InhaleMillis
+        BreathPhase.Hold -> HoldMillis
+        BreathPhase.Exhale -> ExhaleMillis
+    }
+
+private fun phaseColor(phase: BreathPhase): Color = when (phase) {
+    BreathPhase.Inhale -> Color(0xFF6FE7A7)
+    BreathPhase.Hold -> Color(0xFF79C7FF)
+    BreathPhase.Exhale -> Color(0xFFFF78D4)
+}
+
+private fun Int.toDisplaySeconds(): Int = ((this + 999) / 1000).coerceAtLeast(0)
 
 @Composable
 private fun CompletionActions(
