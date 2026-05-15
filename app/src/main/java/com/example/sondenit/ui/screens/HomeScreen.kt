@@ -1,5 +1,6 @@
 package com.example.sondenit.ui.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.NightsStay
@@ -26,6 +28,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,19 +41,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.sondenit.R
 import com.example.sondenit.data.SessionRepository
+import com.example.sondenit.data.SleepPhase
 import com.example.sondenit.data.SleepSession
 import com.example.sondenit.ui.components.SessionRow
 import com.example.sondenit.ui.theme.Lavender
 import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightDeep
 import com.example.sondenit.ui.theme.NightMid
+import com.example.sondenit.ui.theme.NightSurface
 import com.example.sondenit.ui.theme.OnNight
 import com.example.sondenit.ui.theme.OnNightMuted
+import com.example.sondenit.ui.theme.PinkDawn
+import com.example.sondenit.ui.theme.SkyTeal
 
 @Composable
 fun HomeScreen(
@@ -64,6 +77,21 @@ fun HomeScreen(
 ) {
     var renaming by rememberSaveable(stateSaver = sessionIdSaver) { mutableStateOf<String?>(null) }
     var deleting by rememberSaveable(stateSaver = sessionIdSaver) { mutableStateOf<String?>(null) }
+    val phaseHistory = remember(sessions) {
+        sessions
+            .filter { it.endedAt != null }
+            .sortedBy { it.startedAt }
+            .mapNotNull { session ->
+                repo.readStats(session.id)?.let { stats ->
+                    PhaseHistoryPoint(
+                        deepMs = stats.phaseDurations[SleepPhase.DEEP] ?: 0L,
+                        remMs = stats.phaseDurations[SleepPhase.REM] ?: 0L,
+                        lightMs = stats.phaseDurations[SleepPhase.LIGHT] ?: 0L,
+                        awakeMs = stats.phaseDurations[SleepPhase.AWAKE] ?: 0L,
+                    )
+                }
+            }
+    }
 
     Box(
         modifier = Modifier
@@ -92,6 +120,10 @@ fun HomeScreen(
                     onClick = onPrimaryAction,
                 )
                 Spacer(Modifier.height(16.dp))
+            }
+            item {
+                PhaseHistoryGraph(phaseHistory)
+                Spacer(Modifier.height(12.dp))
             }
             if (sessions.isEmpty()) {
                 item {
@@ -235,6 +267,151 @@ private fun PrimaryActionCard(isResume: Boolean, onClick: () -> Unit) {
                 fontWeight = FontWeight.Bold,
             )
         }
+    }
+}
+
+private data class PhaseHistoryPoint(
+    val deepMs: Long,
+    val remMs: Long,
+    val lightMs: Long,
+    val awakeMs: Long,
+)
+
+private data class PhaseHistoryLine(
+    val label: String,
+    val color: Color,
+    val value: (PhaseHistoryPoint) -> Long,
+)
+
+@Composable
+private fun PhaseHistoryGraph(points: List<PhaseHistoryPoint>) {
+    val lines = listOf(
+        PhaseHistoryLine(stringResource(R.string.phase_deep), Lavender) { it.deepMs },
+        PhaseHistoryLine(stringResource(R.string.phase_rem), MoonGlow) { it.remMs },
+        PhaseHistoryLine(stringResource(R.string.phase_light), SkyTeal) { it.lightMs },
+        PhaseHistoryLine(stringResource(R.string.phase_awake), PinkDawn) { it.awakeMs },
+    )
+    val maxValue = lines
+        .maxOfOrNull { line -> points.maxOfOrNull { line.value(it) } ?: 0L }
+        ?.coerceAtLeast(1L) ?: 1L
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = NightSurface,
+        shape = RoundedCornerShape(20.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.phase_history),
+                color = OnNight,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(10.dp))
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+            ) {
+                val left = 8.dp.toPx()
+                val right = size.width - 8.dp.toPx()
+                val top = 8.dp.toPx()
+                val bottom = size.height - 8.dp.toPx()
+                val chartWidth = (right - left).coerceAtLeast(1f)
+                val chartHeight = (bottom - top).coerceAtLeast(1f)
+
+                repeat(4) { idx ->
+                    val y = top + chartHeight * idx / 3f
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.08f),
+                        start = Offset(left, y),
+                        end = Offset(right, y),
+                        strokeWidth = 1.dp.toPx(),
+                    )
+                }
+
+                if (points.isNotEmpty()) {
+                    lines.forEach { line ->
+                        val coordinates = points.mapIndexed { index, point ->
+                            val x = if (points.size == 1) {
+                                left + chartWidth / 2f
+                            } else {
+                                left + chartWidth * index / (points.size - 1).toFloat()
+                            }
+                            val fraction = line.value(point).toFloat() / maxValue.toFloat()
+                            val y = bottom - chartHeight * fraction.coerceIn(0f, 1f)
+                            Offset(x, y)
+                        }
+                        val color = line.color.copy(alpha = 0.9f)
+                        if (coordinates.size == 1) {
+                            drawLine(
+                                color = color,
+                                start = Offset(left, coordinates.first().y),
+                                end = Offset(right, coordinates.first().y),
+                                strokeWidth = 2.dp.toPx(),
+                                cap = StrokeCap.Round,
+                            )
+                        } else {
+                            val path = Path().apply {
+                                moveTo(coordinates.first().x, coordinates.first().y)
+                                coordinates.drop(1).forEach { lineTo(it.x, it.y) }
+                            }
+                            drawPath(
+                                path = path,
+                                color = color,
+                                style = Stroke(
+                                    width = 2.dp.toPx(),
+                                    cap = StrokeCap.Round,
+                                ),
+                            )
+                        }
+                        coordinates.forEach { point ->
+                            drawCircle(
+                                color = line.color,
+                                radius = 3.5.dp.toPx(),
+                                center = point,
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                lines.forEach { line ->
+                    PhaseLegendItem(
+                        label = line.label,
+                        color = line.color,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhaseLegendItem(label: String, color: Color, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color),
+        )
+        Spacer(Modifier.size(5.dp))
+        Text(
+            text = label,
+            color = OnNightMuted,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

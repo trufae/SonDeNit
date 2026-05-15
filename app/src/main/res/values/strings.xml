@@ -35,6 +35,7 @@
     <string name="comments_dialog_title">Comentaris</string>
     <string name="comments_field_label">Notes</string>
     <string name="hours_slept">Hores dormides</string>
+    <string name="phase_history">Històric de fases</string>
     <string name="phases">Fases del son</string>
     <string name="phase_awake">Despert</string>
     <string name="phase_light">Lleuger</string>
