@@ -46,6 +46,7 @@ sealed class SessionEvent {
         val ambientDb: Float,
         val classification: SoundClass,
         val file: String,
+        val favorite: Boolean = false,
     ) : SessionEvent() {
         override fun toJson(): JSONObject = baseJson("audio_chunk").apply {
             put("durationMs", durationMs)
@@ -55,6 +56,7 @@ sealed class SessionEvent {
             put("ambientDb", ambientDb.toDouble())
             put("class", classification.name)
             put("file", file)
+            put("favorite", favorite)
         }
     }
 
@@ -79,6 +81,7 @@ sealed class SessionEvent {
                         SoundClass.valueOf(json.optString("class", "UNKNOWN"))
                     }.getOrDefault(SoundClass.UNKNOWN),
                     file = json.optString("file"),
+                    favorite = json.optBoolean("favorite", false),
                 )
                 else -> null
             }

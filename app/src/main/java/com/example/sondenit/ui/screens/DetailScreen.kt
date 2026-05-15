@@ -78,6 +78,7 @@ import com.example.sondenit.data.SessionStats
 import com.example.sondenit.data.SessionStatsComputer
 import com.example.sondenit.data.SleepPhase
 import com.example.sondenit.data.SleepSession
+import com.example.sondenit.data.SoundClass
 import com.example.sondenit.ui.components.EventRibbon
 import com.example.sondenit.ui.components.PieChartWithLegend
 import com.example.sondenit.ui.components.PieSlice
@@ -111,6 +112,16 @@ private const val MIN_INT_MAX_S = 30f
 private val WIDE_BREAKPOINT = 600.dp
 private val SECTION_PAD = 20.dp
 private val TIMELINE_PAD = 14.dp
+private val EDITABLE_SOUND_CLASSES = listOf(
+    SoundClass.SPEECH,
+    SoundClass.SNORE,
+    SoundClass.CAT_MEOW,
+    SoundClass.DOG_BARK,
+    SoundClass.COUGH,
+    SoundClass.MOVEMENT,
+    SoundClass.NOISE,
+    SoundClass.UNKNOWN,
+)
 
 private data class PlaybackState(
     val file: String,
@@ -129,12 +140,14 @@ fun DetailScreen(
     val player = remember { AudioPlayer() }
     var playback by remember { mutableStateOf<PlaybackState?>(null) }
     var mapTimestamp by rememberSaveable(session.id) { mutableStateOf(session.startedAt) }
-    val events = remember(session.id, session.endedAt) { repo.readEvents(session.id) }
+    var events by remember(session.id, session.endedAt) { mutableStateOf(repo.readEvents(session.id)) }
     val sessionDir = remember(session.id) { repo.sessionDir(session.id) }
 
     var renaming by rememberSaveable { mutableStateOf(false) }
     var editingNotes by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
+    var editingAudioChunks by remember { mutableStateOf<List<SessionEvent.AudioChunk>?>(null) }
+    var changingAudioType by remember { mutableStateOf<List<SessionEvent.AudioChunk>?>(null) }
     var newName by rememberSaveable(session.id) { mutableStateOf(session.displayName) }
     var notesDraft by rememberSaveable(session.id) { mutableStateOf(session.notes) }
 
@@ -251,6 +264,7 @@ fun DetailScreen(
                         notesDraft = session.notes
                         editingNotes = true
                     },
+                    onEditAudioRow = { editingAudioChunks = it },
                 )
                 isWide -> WidePortraitLayout(
                     session = session,
@@ -277,6 +291,7 @@ fun DetailScreen(
                         notesDraft = session.notes
                         editingNotes = true
                     },
+                    onEditAudioRow = { editingAudioChunks = it },
                 )
                 else -> CompactLayout(
                     session = session,
@@ -303,6 +318,7 @@ fun DetailScreen(
                         notesDraft = session.notes
                         editingNotes = true
                     },
+                    onEditAudioRow = { editingAudioChunks = it },
                 )
             }
         }
@@ -383,6 +399,42 @@ fun DetailScreen(
             text = { Text(stringResource(R.string.delete_dialog_message)) },
         )
     }
+    editingAudioChunks?.let { chunks ->
+        AudioChunkActionsDialog(
+            chunks = chunks,
+            onDismiss = { editingAudioChunks = null },
+            onFavorite = {
+                repo.markAudioChunksFavorite(session.id, chunks)
+                events = repo.readEvents(session.id)
+                editingAudioChunks = null
+            },
+            onDelete = {
+                val files = chunks.map { it.file }.toSet()
+                if (playback?.file in files) {
+                    player.stop()
+                    playback = null
+                }
+                repo.deleteAudioChunks(session.id, chunks)
+                events = repo.readEvents(session.id)
+                editingAudioChunks = null
+            },
+            onChangeType = {
+                changingAudioType = chunks
+                editingAudioChunks = null
+            },
+        )
+    }
+    changingAudioType?.let { chunks ->
+        AudioTypeDialog(
+            chunks = chunks,
+            onDismiss = { changingAudioType = null },
+            onSelect = { klass ->
+                repo.changeAudioChunksClass(session.id, chunks, klass)
+                events = repo.readEvents(session.id)
+                changingAudioType = null
+            },
+        )
+    }
 }
 
 // ── layout variants ────────────────────────────────────────────────────────
@@ -410,6 +462,7 @@ private fun CompactLayout(
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
+    onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -463,6 +516,7 @@ private fun CompactLayout(
             onPlayGroup = onPlayGroup,
             onPlayAllAudio = onPlayAllAudio,
             onStopPlayback = onStopPlayback,
+            onEditAudioRow = onEditAudioRow,
         )
     }
 }
@@ -490,6 +544,7 @@ private fun WidePortraitLayout(
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
+    onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -566,6 +621,7 @@ private fun WidePortraitLayout(
             onPlayGroup = onPlayGroup,
             onPlayAllAudio = onPlayAllAudio,
             onStopPlayback = onStopPlayback,
+            onEditAudioRow = onEditAudioRow,
         )
     }
 }
@@ -593,6 +649,7 @@ private fun SplitLayout(
     minIntSeconds: Float,
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
+    onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
 ) {
     val timelineState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -671,6 +728,7 @@ private fun SplitLayout(
                 onPlayGroup = onPlayGroup,
                 onPlayAllAudio = onPlayAllAudio,
                 onStopPlayback = onStopPlayback,
+                onEditAudioRow = onEditAudioRow,
             )
         }
     }
@@ -686,6 +744,7 @@ private fun LazyListScope.timelineSection(
     onPlayGroup: (NoiseGroup) -> Unit,
     onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
+    onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
 ) {
     item {
         Spacer(Modifier.height(20.dp))
@@ -731,11 +790,145 @@ private fun LazyListScope.timelineSection(
                         showLineBelow = idx < timelineRows.size - 1,
                         onPlay = { onPlayGroup(row.group) },
                         onStop = onStopPlayback,
+                        onLongClick = { onEditAudioRow(row.group.chunks) },
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun AudioChunkActionsDialog(
+    chunks: List<SessionEvent.AudioChunk>,
+    onDismiss: () -> Unit,
+    onFavorite: () -> Unit,
+    onDelete: () -> Unit,
+    onChangeType: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+        title = {
+            Text(
+                text = if (chunks.size == 1)
+                    stringResource(R.string.recording_actions_title)
+                else stringResource(R.string.recording_group_actions_title, chunks.size),
+            )
+        },
+        text = {
+            Column {
+                DialogActionButton(
+                    icon = Icons.Filled.Star,
+                    text = stringResource(R.string.mark_as_favorite),
+                    tint = MoonGlow,
+                    onClick = onFavorite,
+                )
+                DialogActionButton(
+                    icon = Icons.Filled.Delete,
+                    text = stringResource(R.string.delete_recording),
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = onDelete,
+                )
+                DialogActionButton(
+                    icon = Icons.Filled.Edit,
+                    text = stringResource(R.string.change_sound_type),
+                    tint = SkyTeal,
+                    onClick = onChangeType,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun AudioTypeDialog(
+    chunks: List<SessionEvent.AudioChunk>,
+    onDismiss: () -> Unit,
+    onSelect: (SoundClass) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+        title = { Text(stringResource(R.string.change_sound_type_title)) },
+        text = {
+            Column {
+                EDITABLE_SOUND_CLASSES.forEach { klass ->
+                    DialogActionButton(
+                        icon = Icons.Filled.GraphicEq,
+                        text = soundClassLabel(klass),
+                        tint = soundClassColor(klass),
+                        onClick = { onSelect(klass) },
+                    )
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun DialogActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = text,
+                color = if (tint == MaterialTheme.colorScheme.error) tint else OnNight,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun soundClassLabel(klass: SoundClass): String = when (klass) {
+    SoundClass.SPEECH -> stringResource(R.string.sound_type_voice)
+    SoundClass.SNORE -> stringResource(R.string.sound_type_snore)
+    SoundClass.CAT_MEOW -> stringResource(R.string.sound_type_cat)
+    SoundClass.DOG_BARK -> stringResource(R.string.sound_type_dog)
+    SoundClass.COUGH -> stringResource(R.string.sound_type_cough)
+    SoundClass.MOVEMENT -> stringResource(R.string.sound_type_movement)
+    SoundClass.NOISE -> stringResource(R.string.sound_type_noise)
+    SoundClass.UNKNOWN -> stringResource(R.string.sound_type_unknown)
+}
+
+private fun soundClassColor(klass: SoundClass): Color = when (klass) {
+    SoundClass.SPEECH -> Lavender
+    SoundClass.COUGH -> PinkDawn
+    SoundClass.MOVEMENT -> SkyTeal
+    SoundClass.SNORE -> MoonGlow
+    SoundClass.DOG_BARK -> PinkDawn
+    SoundClass.CAT_MEOW -> Lavender
+    SoundClass.NOISE -> OnNightMuted
+    SoundClass.UNKNOWN -> OnNightMuted
 }
 
 @Composable

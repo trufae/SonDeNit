@@ -2,6 +2,8 @@ package com.example.sondenit.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
@@ -34,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -58,6 +62,7 @@ data class TimelineRowSpec(
     val playable: Boolean = false,
     val playing: Boolean = false,
     val countBadge: Int? = null,
+    val favorite: Boolean = false,
 )
 
 fun describe(event: SessionEvent, contextLabels: TimelineLabels): TimelineRowSpec = when (event) {
@@ -96,6 +101,7 @@ fun describe(event: SessionEvent, contextLabels: TimelineLabels): TimelineRowSpe
                    else Icons.Filled.GraphicEq,
             accent = color,
             playable = true,
+            favorite = event.favorite,
         )
     }
 }
@@ -126,6 +132,7 @@ fun describeGroup(group: NoiseGroup): TimelineRowSpec {
         accent = color,
         playable = true,
         countBadge = if (group.chunks.size > 1) group.chunks.size else null,
+        favorite = group.chunks.any { it.favorite },
     )
 }
 
@@ -142,6 +149,7 @@ fun describeSound(klass: SoundClass): Pair<String, Color> = when (klass) {
 
 fun colorForClass(klass: SoundClass): Color = describeSound(klass).second
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TimelineRow(
     spec: TimelineRowSpec,
@@ -149,6 +157,7 @@ fun TimelineRow(
     showLineBelow: Boolean,
     onPlay: (() -> Unit)? = null,
     onStop: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -210,10 +219,22 @@ fun TimelineRow(
             )
         }
         Spacer(Modifier.width(8.dp))
+        val surfaceModifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .let { base ->
+                if (onLongClick == null) {
+                    base
+                } else {
+                    base.combinedClickable(
+                        role = Role.Button,
+                        onClick = {},
+                        onLongClick = onLongClick,
+                    )
+                }
+            }
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
+            modifier = surfaceModifier,
             color = if (spec.playing) spec.accent.copy(alpha = 0.22f)
                 else MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(14.dp),
@@ -236,6 +257,23 @@ fun TimelineRow(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
+                    if (spec.favorite) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = MoonGlow,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "Favorit",
+                                color = MoonGlow,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
                     spec.subtitle?.let {
                         Text(
                             text = it,

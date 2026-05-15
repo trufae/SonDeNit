@@ -102,6 +102,36 @@ class SessionRepository(context: Context) {
         }
     }
 
+    fun markAudioChunksFavorite(
+        id: String,
+        chunks: Collection<SessionEvent.AudioChunk>,
+        favorite: Boolean = true,
+    ) {
+        updateAudioChunks(id, chunks) { it.copy(favorite = favorite) }
+    }
+
+    fun changeAudioChunksClass(
+        id: String,
+        chunks: Collection<SessionEvent.AudioChunk>,
+        classification: SoundClass,
+    ) {
+        updateAudioChunks(id, chunks) { it.copy(classification = classification) }
+    }
+
+    fun deleteAudioChunks(id: String, chunks: Collection<SessionEvent.AudioChunk>) {
+        if (chunks.isEmpty()) return
+        val targets = chunks.map { AudioChunkKey(it.timestamp, it.file) }.toSet()
+        val events = readEvents(id)
+        val kept = events.filterNot { event ->
+            event is SessionEvent.AudioChunk && AudioChunkKey(event.timestamp, event.file) in targets
+        }
+        writeEvents(id, kept)
+        chunks.map { it.file }.distinct().forEach { file ->
+            File(sessionDir(id), file).delete()
+        }
+        refreshStatsCache(id)
+    }
+
     fun readEvents(id: String): List<SessionEvent> {
         val f = File(sessionDir(id), EVENTS_FILE)
         if (!f.exists()) return emptyList()
@@ -111,6 +141,46 @@ class SessionRepository(context: Context) {
                 else runCatching { SessionEvent.fromJson(JSONObject(line)) }.getOrNull()
             }.toList()
         }
+    }
+
+    private fun updateAudioChunks(
+        id: String,
+        chunks: Collection<SessionEvent.AudioChunk>,
+        transform: (SessionEvent.AudioChunk) -> SessionEvent.AudioChunk,
+    ) {
+        if (chunks.isEmpty()) return
+        val targets = chunks.map { AudioChunkKey(it.timestamp, it.file) }.toSet()
+        val events = readEvents(id).map { event ->
+            if (event is SessionEvent.AudioChunk && AudioChunkKey(event.timestamp, event.file) in targets) {
+                transform(event)
+            } else {
+                event
+            }
+        }
+        writeEvents(id, events)
+        refreshStatsCache(id)
+    }
+
+    private fun writeEvents(id: String, events: List<SessionEvent>) {
+        val f = File(sessionDir(id), EVENTS_FILE)
+        FileWriter(f, false).use { w ->
+            events.forEach { event ->
+                w.append(event.toJson().toString())
+                w.append('\n')
+            }
+        }
+    }
+
+    private fun refreshStatsCache(id: String) {
+        val statsFile = File(sessionDir(id), STATS_FILE)
+        val session = readSession(id)
+        val endedAt = session?.endedAt
+        if (endedAt == null) {
+            if (statsFile.exists()) statsFile.delete()
+            return
+        }
+        val stats = SessionStatsComputer.compute(readEvents(id), endedAt)
+        statsFile.writeText(stats.toJson().toString())
     }
 
     fun readStats(id: String): SessionStats? {
@@ -143,3 +213,8 @@ class SessionRepository(context: Context) {
         private val DISPLAY_FORMAT = SimpleDateFormat("EEEE d MMMM", Locale.forLanguageTag("ca"))
     }
 }
+
+private data class AudioChunkKey(
+    val timestamp: Long,
+    val file: String,
+)
