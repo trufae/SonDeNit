@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Icon
 import com.example.sondenit.data.SleepSession
@@ -104,6 +105,17 @@ fun SessionRow(
                         text = formatDurationShort(durationMs),
                         color = OnNightMuted,
                         style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                val notes = session.notes.trim()
+                if (notes.isNotEmpty()) {
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        text = notes,
+                        color = OnNight,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
