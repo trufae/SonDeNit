@@ -46,11 +46,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.sondenit.data.SessionRepository
 import com.example.sondenit.data.SleepSession
+import com.example.sondenit.audio.AudioSettings
 import com.example.sondenit.service.RecordingController
 import com.example.sondenit.service.RecordingState
 import com.example.sondenit.ui.screens.DetailScreen
 import com.example.sondenit.ui.screens.HomeScreen
 import com.example.sondenit.ui.screens.RecordingScreen
+import com.example.sondenit.ui.screens.SettingsScreen
 import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightDeep
 import com.example.sondenit.ui.theme.NightMid
@@ -73,6 +75,7 @@ class MainActivity : ComponentActivity() {
 private sealed class Screen {
     object Home : Screen()
     object Recording : Screen()
+    object Settings : Screen()
     data class Detail(val sessionId: String) : Screen()
 }
 
@@ -89,6 +92,9 @@ private fun AppRoot() {
     val recentEvents by RecordingController.recentEvents.collectAsState()
     val chunkCount by RecordingController.chunkCount.collectAsState()
 
+    var equalizationAmount by remember {
+        mutableStateOf(AudioSettings.equalizationAmount(context.applicationContext))
+    }
     var screen by rememberSaveable(stateSaver = ScreenSaver) {
         mutableStateOf<Screen>(Screen.Home)
     }
@@ -166,6 +172,7 @@ private fun AppRoot() {
                             screen = if (sess.endedAt == null) Screen.Recording
                                      else Screen.Detail(sess.id)
                         },
+                        onOpenSettings = { screen = Screen.Settings },
                         onRename = { sess, newName ->
                             repo.rename(sess.id, newName)
                             sessions = repo.listSessions()
@@ -176,6 +183,18 @@ private fun AppRoot() {
                         },
                     )
                 }
+            }
+            Screen.Settings -> {
+                SettingsScreen(
+                    micGranted = micGranted,
+                    equalizationAmount = equalizationAmount,
+                    onEqualizationChange = { amount ->
+                        equalizationAmount = amount
+                        AudioSettings.setEqualizationAmount(context.applicationContext, amount)
+                    },
+                    onRequestMic = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                    onBack = { screen = Screen.Home },
+                )
             }
             Screen.Recording -> {
                 val current = activeSession ?: repo.activeSession()
@@ -306,6 +325,7 @@ private val ScreenSaver = androidx.compose.runtime.saveable.Saver<Screen, String
         when (screen) {
             Screen.Home -> "home"
             Screen.Recording -> "rec"
+            Screen.Settings -> "settings"
             is Screen.Detail -> "detail:${screen.sessionId}"
         }
     },
@@ -313,6 +333,7 @@ private val ScreenSaver = androidx.compose.runtime.saveable.Saver<Screen, String
         when {
             value == "home" -> Screen.Home
             value == "rec" -> Screen.Recording
+            value == "settings" -> Screen.Settings
             value.startsWith("detail:") -> Screen.Detail(value.removePrefix("detail:"))
             else -> Screen.Home
         }

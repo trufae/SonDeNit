@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
-import android.media.MediaRecorder
 import androidx.core.content.ContextCompat
 import com.example.sondenit.data.SoundClass
 import java.io.File
@@ -52,14 +51,7 @@ class AudioCaptureLoop(
         val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_IN, ENCODING)
         val bufBytes = max(minBuf, FRAME_SAMPLES * 2 * 8)
 
-        val record = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            SAMPLE_RATE, CHANNEL_IN, ENCODING, bufBytes
-        )
-        if (record.state != AudioRecord.STATE_INITIALIZED) {
-            record.release()
-            return
-        }
+        val record = AudioRecordFactory.create(SAMPLE_RATE, CHANNEL_IN, ENCODING, bufBytes) ?: return
         record.startRecording()
         running = true
 
@@ -192,7 +184,12 @@ class AudioCaptureLoop(
         val name = "%1\$tH-%1\$tM-%1\$tS_%1\$tL.m4a".format(java.util.Date(startTimestamp))
         val out = File(outputDir, name)
         runCatching {
-            AacM4aEncoder().encode(merged, total, out)
+            val processed = AudioLeveling.apply(
+                merged,
+                total,
+                AudioSettings.equalizationAmount(context),
+            )
+            AacM4aEncoder().encode(processed, processed.size, out)
         }.onFailure {
             return
         }

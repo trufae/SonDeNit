@@ -20,12 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -72,6 +74,7 @@ fun HomeScreen(
     activeSession: SleepSession?,
     onPrimaryAction: () -> Unit,
     onOpenSession: (SleepSession) -> Unit,
+    onOpenSettings: () -> Unit,
     onRename: (SleepSession, String) -> Unit,
     onDelete: (SleepSession) -> Unit,
 ) {
@@ -111,7 +114,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
-                Header()
+                Header(onOpenSettings)
             }
             item {
                 Spacer(Modifier.height(20.dp))
@@ -200,7 +203,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun Header() {
+private fun Header(onOpenSettings: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -219,7 +222,7 @@ private fun Header() {
             )
         }
         Spacer(Modifier.size(12.dp))
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(
                 text = stringResource(R.string.home_title),
                 color = OnNight,
@@ -230,6 +233,13 @@ private fun Header() {
                 text = stringResource(R.string.home_subtitle),
                 color = OnNightMuted,
                 style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        IconButton(onClick = onOpenSettings) {
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = stringResource(R.string.settings),
+                tint = OnNight,
             )
         }
     }
