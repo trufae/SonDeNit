@@ -1,5 +1,5 @@
 <h1 align="center">Son de Nit</h1>
-
+<hr />
 <p align="center">
   <strong>Sleep sound tracking for Android, private by default.</strong>
 </p>
