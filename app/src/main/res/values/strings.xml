@@ -35,6 +35,10 @@
     <string name="settings_equalization_description">A 0%% els sons es desen amb el volum capturat. Amb valors alts, els sons fluixos es pugen abans de desar-los perquè siguin més fàcils d\'escoltar; això també pot fer que sons llunyans semblin més propers i forts.</string>
     <string name="settings_equalization_natural">Natural</string>
     <string name="settings_equalization_strong">Més igualat</string>
+    <string name="settings_start_delay_title">Espera abans de gravar</string>
+    <string name="settings_start_delay_description">Temps de compte enrere abans d\'activar el micròfon en començar una sessió.</string>
+    <string name="settings_start_delay_none">Sense espera</string>
+    <string name="settings_start_delay_seconds">%1$d s</string>
     <string name="settings_test_title">Prova de micròfon</string>
     <string name="settings_test_body">Grava una mostra de 5 segons amb el mateix processament que tindran les sessions noves. Fes un soroll fluix i un de fort per comparar el resultat.</string>
     <string name="settings_test_record">Grava 5 s</string>
@@ -65,6 +69,9 @@
     <string name="recording_chunk">Detectant so…</string>
     <string name="listening">Escoltant amb el micròfon</string>
     <string name="paused">En pausa</string>
+    <string name="countdown_title">Començant en</string>
+    <string name="countdown_not_recording">Encara no s\'està gravant</string>
+    <string name="countdown_cancel">Cancel·la</string>
 
     <!-- Confirmacions -->
     <string name="confirm_stop_title">Atura la sessió?</string>

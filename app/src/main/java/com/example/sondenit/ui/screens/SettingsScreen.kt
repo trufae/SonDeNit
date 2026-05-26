@@ -1,5 +1,6 @@
 package com.example.sondenit.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,14 +19,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +73,9 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     micGranted: Boolean,
     equalizationAmount: Float,
+    recordingStartDelaySeconds: Int,
     onEqualizationChange: (Float) -> Unit,
+    onRecordingStartDelayChange: (Int) -> Unit,
     onRequestMic: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -103,6 +110,12 @@ fun SettingsScreen(
                 EqualizationPanel(
                     amount = equalizationAmount,
                     onChange = onEqualizationChange,
+                )
+            }
+            item {
+                RecordingStartDelayPanel(
+                    delaySeconds = recordingStartDelaySeconds,
+                    onDelayChange = onRecordingStartDelayChange,
                 )
             }
             item {
@@ -213,6 +226,76 @@ private fun EqualizationPanel(amount: Float, onChange: (Float) -> Unit) {
         }
     }
 }
+
+@Composable
+private fun RecordingStartDelayPanel(delaySeconds: Int, onDelayChange: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = recordingStartDelayLabel(delaySeconds)
+
+    SettingsPanel {
+        IconTitle(
+            icon = Icons.Filled.Timer,
+            accent = Lavender,
+            title = stringResource(R.string.settings_start_delay_title),
+            value = selectedLabel,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.settings_start_delay_description),
+            color = OnNightMuted,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(14.dp))
+        Box {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, Lavender.copy(alpha = 0.45f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = NightDeep.copy(alpha = 0.2f),
+                    contentColor = OnNight,
+                ),
+            ) {
+                Text(
+                    text = selectedLabel,
+                    color = OnNight,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = null,
+                    tint = OnNight,
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                AudioSettings.RECORDING_START_DELAY_OPTIONS_SECONDS.forEach { seconds ->
+                    DropdownMenuItem(
+                        text = { Text(recordingStartDelayLabel(seconds)) },
+                        onClick = {
+                            expanded = false
+                            onDelayChange(seconds)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun recordingStartDelayLabel(seconds: Int): String =
+    if (seconds <= 0) {
+        stringResource(R.string.settings_start_delay_none)
+    } else {
+        stringResource(R.string.settings_start_delay_seconds, seconds)
+    }
 
 @Composable
 private fun TestRecordingPanel(

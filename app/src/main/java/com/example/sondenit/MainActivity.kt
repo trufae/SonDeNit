@@ -54,6 +54,7 @@ import com.example.sondenit.ui.screens.DetailScreen
 import com.example.sondenit.ui.screens.HomeScreen
 import com.example.sondenit.ui.screens.RecordingScreen
 import com.example.sondenit.ui.screens.SettingsScreen
+import com.example.sondenit.ui.screens.StartCountdownScreen
 import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightDeep
 import com.example.sondenit.ui.theme.NightMid
@@ -76,6 +77,7 @@ class MainActivity : ComponentActivity() {
 private sealed class Screen {
     object Home : Screen()
     object Breathing : Screen()
+    object Countdown : Screen()
     object Recording : Screen()
     object Settings : Screen()
     data class Detail(val sessionId: String) : Screen()
@@ -97,6 +99,9 @@ private fun AppRoot() {
     var equalizationAmount by remember {
         mutableStateOf(AudioSettings.equalizationAmount(context.applicationContext))
     }
+    var recordingStartDelaySeconds by remember {
+        mutableStateOf(AudioSettings.recordingStartDelaySeconds(context.applicationContext))
+    }
     var screen by rememberSaveable(stateSaver = ScreenSaver) {
         mutableStateOf<Screen>(Screen.Home)
     }
@@ -107,6 +112,15 @@ private fun AppRoot() {
         context, Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
 
+    fun beginSessionStart() {
+        if (recordingStartDelaySeconds <= 0) {
+            startSession(repo, context, screen) { newScreen -> screen = newScreen }
+            sessions = repo.listSessions()
+        } else {
+            screen = Screen.Countdown
+        }
+    }
+
     val micLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -114,8 +128,7 @@ private fun AppRoot() {
             permissionDeniedSticky = false
             if (pendingPermissionStart) {
                 pendingPermissionStart = false
-                startSession(repo, context, screen) { newScreen -> screen = newScreen }
-                sessions = repo.listSessions()
+                beginSessionStart()
             }
         } else {
             pendingPermissionStart = false
@@ -166,8 +179,7 @@ private fun AppRoot() {
                                     notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                 }
                             } else {
-                                startSession(repo, context, screen) { screen = it }
-                                sessions = repo.listSessions()
+                                beginSessionStart()
                             }
                         },
                         onOpenBreathing = { screen = Screen.Breathing },
@@ -192,13 +204,31 @@ private fun AppRoot() {
                     onClose = { screen = Screen.Home },
                 )
             }
+            Screen.Countdown -> {
+                StartCountdownScreen(
+                    delaySeconds = recordingStartDelaySeconds,
+                    onFinished = {
+                        startSession(repo, context, screen) { newScreen -> screen = newScreen }
+                        sessions = repo.listSessions()
+                    },
+                    onCancel = {
+                        screen = Screen.Home
+                        sessions = repo.listSessions()
+                    },
+                )
+            }
             Screen.Settings -> {
                 SettingsScreen(
                     micGranted = micGranted,
                     equalizationAmount = equalizationAmount,
+                    recordingStartDelaySeconds = recordingStartDelaySeconds,
                     onEqualizationChange = { amount ->
                         equalizationAmount = amount
                         AudioSettings.setEqualizationAmount(context.applicationContext, amount)
+                    },
+                    onRecordingStartDelayChange = { seconds ->
+                        recordingStartDelaySeconds = seconds
+                        AudioSettings.setRecordingStartDelaySeconds(context.applicationContext, seconds)
                     },
                     onRequestMic = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                     onBack = { screen = Screen.Home },
@@ -333,6 +363,7 @@ private val ScreenSaver = androidx.compose.runtime.saveable.Saver<Screen, String
         when (screen) {
             Screen.Home -> "home"
             Screen.Breathing -> "breathing"
+            Screen.Countdown -> "countdown"
             Screen.Recording -> "rec"
             Screen.Settings -> "settings"
             is Screen.Detail -> "detail:${screen.sessionId}"
@@ -342,6 +373,7 @@ private val ScreenSaver = androidx.compose.runtime.saveable.Saver<Screen, String
         when {
             value == "home" -> Screen.Home
             value == "breathing" -> Screen.Breathing
+            value == "countdown" -> Screen.Countdown
             value == "rec" -> Screen.Recording
             value == "settings" -> Screen.Settings
             value.startsWith("detail:") -> Screen.Detail(value.removePrefix("detail:"))
