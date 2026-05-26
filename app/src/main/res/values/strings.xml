@@ -29,7 +29,7 @@
     <!-- Configuració -->
     <string name="settings">Configuració</string>
     <string name="settings_title">Configuració</string>
-    <string name="settings_subtitle">Micròfon, so i càlcul del son</string>
+    <string name="settings_subtitle">Micròfon, moviment i càlcul del son</string>
     <string name="settings_equalization_title">Realç del volum</string>
     <string name="settings_equalization_hint">%1$d%%</string>
     <string name="settings_equalization_description">A 0%% els sons es desen amb el volum capturat. Amb valors alts, els sons fluixos es pugen abans de desar-los perquè siguin més fàcils d\'escoltar; això també pot fer que sons llunyans semblin més propers i forts.</string>
@@ -46,11 +46,11 @@
     <string name="settings_mic_permission">Cal permís de micròfon per fer la prova.</string>
     <string name="settings_mic_permission_button">Dóna permís</string>
     <string name="settings_phase_title">Com es calculen les fases</string>
-    <string name="settings_phase_intro">Son de Nit no fa diagnòstic mèdic. Divideix la sessió en blocs de 5 minuts i calcula una activitat aproximada amb sorolls agrupats, diferència entre pic i ambient, durada del so, pauses i pantalla encesa.</string>
+    <string name="settings_phase_intro">Son de Nit no fa diagnòstic mèdic. Divideix la sessió en blocs de 5 minuts i calcula una activitat aproximada amb sorolls agrupats, moviments de l\'acceleròmetre, diferència entre pic i ambient, durada del so, pauses i pantalla encesa.</string>
     <string name="settings_phase_deep">Bloc molt tranquil: sense sorolls significatius, pauses ni ús de pantalla. És la fase estimada amb menys activitat.</string>
     <string name="settings_phase_rem">Activitat mitjana: algun so agrupat, canvi de respiració o moviment, però no prou intens per marcar el bloc com despert.</string>
     <string name="settings_phase_light">Activitat baixa: petits sons o moviments que superen una mica el soroll ambient.</string>
-    <string name="settings_phase_awake">Activitat alta: pauses, pantalla encesa o sons significatius forts o llargs. Les pauses sempre compten com despert.</string>
+    <string name="settings_phase_awake">Activitat alta: pauses, pantalla encesa, mòbil mogut o sons significatius forts o llargs. Les pauses i els moviments clars del mòbil compten com despert.</string>
 
     <!-- Sessió en curs -->
     <string name="session_in_progress">Sessió en curs</string>
@@ -92,10 +92,12 @@
     <string name="interruptions">Interrupcions</string>
     <string name="noise_events">Sorolls detectats</string>
     <string name="screen_events">Vegades que has mirat el mòbil</string>
+    <string name="movement_events">Moviments detectats</string>
+    <string name="wake_movement_events">Mòbil mogut</string>
     <string name="signals">Indicis detectats</string>
     <string name="signal_speech">Possibles parlaments mentre dormies</string>
     <string name="signal_cough">Possibles tos o esternuts</string>
-    <string name="signal_movement">Possible moviment al llit</string>
+    <string name="signal_movement">Possible moviment al llit o amb el mòbil</string>
     <string name="signal_snore">Possibles roncs o respiració profunda</string>
     <string name="signal_breathing">Respiració irregular detectada</string>
     <string name="signal_dog">Possibles lladrucs de gos</string>

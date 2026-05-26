@@ -21,6 +21,8 @@ data class SessionStats(
     val audioGroupCount: Int,
     val audioChunksByClass: Map<SoundClass, Int>,
     val screenOnEvents: Int,
+    val movementEvents: Int,
+    val wakeMovementEvents: Int,
     val interruptions: Int,
     val ambientAvgDb: Float,
     val phaseDurations: Map<SleepPhase, Long>,
@@ -36,6 +38,8 @@ data class SessionStats(
         put("audioChunkCount", audioChunkCount)
         put("audioGroupCount", audioGroupCount)
         put("screenOnEvents", screenOnEvents)
+        put("movementEvents", movementEvents)
+        put("wakeMovementEvents", wakeMovementEvents)
         put("interruptions", interruptions)
         put("ambientAvgDb", ambientAvgDb.toDouble())
         put("qualityScore", qualityScore)
@@ -86,6 +90,8 @@ data class SessionStats(
                 audioGroupCount = json.optInt("audioGroupCount", json.optInt("audioChunkCount")),
                 audioChunksByClass = classes,
                 screenOnEvents = json.optInt("screenOnEvents"),
+                movementEvents = json.optInt("movementEvents"),
+                wakeMovementEvents = json.optInt("wakeMovementEvents"),
                 interruptions = json.optInt("interruptions"),
                 ambientAvgDb = json.optDouble("ambientAvgDb", 0.0).toFloat(),
                 phaseDurations = phases,
@@ -143,6 +149,8 @@ object SessionStatsComputer {
         val audio = events.filterIsInstance<SessionEvent.AudioChunk>()
         val classes = audio.groupingBy { it.classification }.eachCount()
         val screenOnCount = events.count { it is SessionEvent.ScreenOn }
+        val motion = events.filterIsInstance<SessionEvent.Motion>()
+        val wakeMotion = motion.filter { it.wakeEvent }
         val ambientAvg = if (audio.isEmpty()) 0f
         else audio.map { it.ambientDb }.average().toFloat()
 
@@ -162,6 +170,13 @@ object SessionStatsComputer {
             val loudness = ((g.peakDb - g.ambientDb).coerceAtLeast(0f)) / 20f
             val durationWeight = (g.totalDurationMs / 1000f).coerceAtMost(15f) / 5f
             activity[idx] += 1f + loudness + durationWeight
+        }
+        motion.forEach { ev ->
+            val rel = (ev.timestamp - start).coerceIn(0, total)
+            val idx = (rel / bucketMs).toInt().coerceIn(0, buckets - 1)
+            val accelerationWeight = (ev.peakAcceleration / 0.35f).coerceIn(0.25f, 3f)
+            val durationWeight = (ev.durationMs / 1500f).coerceAtMost(2f)
+            activity[idx] += accelerationWeight + durationWeight + if (ev.wakeEvent) 3f else 0f
         }
         events.forEach { ev ->
             val rel = (ev.timestamp - start).coerceIn(0, total)
@@ -205,25 +220,34 @@ object SessionStatsComputer {
             phaseMs[phase] = phaseMs.getValue(phase) + slotLen
         }
 
-        // Interruptions = significant noise groups + screen-on bursts (debounced).
+        // Interruptions = significant noise groups, screen-on bursts, and clear phone movement.
         val screenBursts = mutableSetOf<Int>()
         events.forEach { ev ->
             if (ev is SessionEvent.ScreenOn) {
-                screenBursts.add(((ev.timestamp - start) / bucketMs).toInt())
+                val rel = (ev.timestamp - start).coerceIn(0, total)
+                screenBursts.add((rel / bucketMs).toInt().coerceIn(0, buckets - 1))
             }
         }
-        val interruptions = significantGroups.size + screenBursts.size
+        val wakeMotionBursts = mutableSetOf<Int>()
+        wakeMotion.forEach { ev ->
+            val rel = (ev.timestamp - start).coerceIn(0, total)
+            wakeMotionBursts.add((rel / bucketMs).toInt().coerceIn(0, buckets - 1))
+        }
+        val interruptions = significantGroups.size + screenBursts.size + wakeMotionBursts.size
 
         val deepRem = (phaseMs[SleepPhase.DEEP] ?: 0L) + (phaseMs[SleepPhase.REM] ?: 0L)
         val deepRemRatio = if (slept > 0) deepRem.toFloat() / slept else 0f
-        val penalty = (interruptions * 4 + screenBursts.size * 2).coerceAtMost(60)
+        val penalty = (interruptions * 4 + screenBursts.size * 2 + wakeMotionBursts.size * 2)
+            .coerceAtMost(60)
         val rawScore = (deepRemRatio * 100f).toInt() - penalty + 30
         val qualityScore = rawScore.coerceIn(0, 100)
 
         val signals = mutableListOf<DetectedSignal>()
         if ((classes[SoundClass.SPEECH] ?: 0) >= 2) signals.add(DetectedSignal.SPEECH)
         if ((classes[SoundClass.COUGH] ?: 0) >= 1) signals.add(DetectedSignal.COUGH)
-        if ((classes[SoundClass.MOVEMENT] ?: 0) >= 3) signals.add(DetectedSignal.MOVEMENT)
+        if ((classes[SoundClass.MOVEMENT] ?: 0) >= 3 || motion.size >= 3) {
+            signals.add(DetectedSignal.MOVEMENT)
+        }
         if ((classes[SoundClass.SNORE] ?: 0) >= 3) signals.add(DetectedSignal.SNORE)
         if ((classes[SoundClass.DOG_BARK] ?: 0) >= 1) signals.add(DetectedSignal.DOG_BARKING)
         if ((classes[SoundClass.CAT_MEOW] ?: 0) >= 1) signals.add(DetectedSignal.CAT_MEOWING)
@@ -244,6 +268,8 @@ object SessionStatsComputer {
             audioGroupCount = groups.size,
             audioChunksByClass = classes,
             screenOnEvents = screenOnCount,
+            movementEvents = motion.size,
+            wakeMovementEvents = wakeMotion.size,
             interruptions = min(interruptions, 999),
             ambientAvgDb = ambientAvg,
             phaseDurations = phaseMs,
@@ -262,6 +288,8 @@ object SessionStatsComputer {
         audioGroupCount = 0,
         audioChunksByClass = emptyMap(),
         screenOnEvents = 0,
+        movementEvents = 0,
+        wakeMovementEvents = 0,
         interruptions = 0,
         ambientAvgDb = 0f,
         phaseDurations = emptyMap(),

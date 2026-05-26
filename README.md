@@ -14,8 +14,8 @@
 
 Son de Nit is a quiet, local-first Android app for following what happens while
 you sleep. Start a session before going to bed, let the phone listen beside you,
-and review the night through audio events, interruptions, screen activity,
-quality hints, and a visual timeline.
+and review the night through audio events, movement, interruptions, screen
+activity, quality hints, and a visual timeline.
 
 The UI is currently in Catalan.
 
@@ -29,7 +29,7 @@ The UI is currently in Catalan.
 - Play back detected sound groups from the detail view.
 - Adjust grouping and minimum interruption thresholds per review.
 - Rename or delete sessions from the app.
-- Track screen-on events during the night.
+- Track screen-on and accelerometer movement events during the night.
 - Classify sounds with a lightweight rule-based classifier for hints such as
   speech, cough, movement, snoring, dog barks, and cat meows.
 
@@ -41,6 +41,8 @@ Son de Nit is designed to keep sleep data on the device.
 - Sessions are stored under the app's private files directory.
 - Each session contains metadata, JSONL events, computed stats, and local audio
   chunks.
+- Accelerometer tracking is reduced to movement events; high-frequency sensor
+  samples are not stored.
 - Sound classification is best-effort and rule-based. It is not a medical
   device, diagnosis tool, or clinical sleep analysis system.
 
@@ -60,6 +62,7 @@ Son de Nit is designed to keep sleep data on the device.
 app/src/main/java/com/example/sondenit/
   audio/        Audio capture, encoding, grouping, playback, classification
   data/         Sessions, events, stats, filesystem repository
+  motion/       Accelerometer movement detection
   service/      Recording controller and foreground service
   ui/           Compose screens, components, and theme
   util/         Date and duration formatting helpers
@@ -108,6 +111,9 @@ Son de Nit asks only for permissions needed for overnight recording:
   microphone capture.
 - `POST_NOTIFICATIONS` on Android 13+ so the recording service can show its
   status notification.
+
+Accelerometer movement detection does not require an Android runtime
+permission.
 
 ## License
 

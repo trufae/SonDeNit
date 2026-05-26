@@ -17,6 +17,7 @@ import com.example.sondenit.R
 import com.example.sondenit.audio.AudioCaptureLoop
 import com.example.sondenit.data.SessionEvent
 import com.example.sondenit.data.SessionRepository
+import com.example.sondenit.motion.AccelerometerMotionMonitor
 
 /**
  * Long-running recording service. Owns the audio capture thread, the screen
@@ -28,8 +29,10 @@ import com.example.sondenit.data.SessionRepository
 class SleepRecordingService : Service() {
 
     private lateinit var repo: SessionRepository
+    private val eventLock = Any()
     private var captureLoop: AudioCaptureLoop? = null
     private var captureThread: Thread? = null
+    private var motionMonitor: AccelerometerMotionMonitor? = null
     private var screenReceiver: ScreenStateReceiver? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var sessionId: String? = null
@@ -64,7 +67,17 @@ class SleepRecordingService : Service() {
             if (resuming) SessionEvent.Resume(System.currentTimeMillis())
             else SessionEvent.SessionStart(System.currentTimeMillis())
         )
+        startMotionMonitor()
         startCaptureThread(id)
+    }
+
+    private fun startMotionMonitor() {
+        val monitor = AccelerometerMotionMonitor(applicationContext) { movement ->
+            appendEvent(movement)
+        }
+        if (monitor.start()) {
+            motionMonitor = monitor
+        }
     }
 
     private fun startCaptureThread(id: String) {
@@ -103,6 +116,7 @@ class SleepRecordingService : Service() {
         if (sessionId == null || paused) return
         paused = true
         captureLoop?.setPaused(true)
+        motionMonitor?.setPaused(true)
         appendEvent(SessionEvent.Pause(System.currentTimeMillis()))
     }
 
@@ -110,6 +124,7 @@ class SleepRecordingService : Service() {
         if (sessionId == null || !paused) return
         paused = false
         captureLoop?.setPaused(false)
+        motionMonitor?.setPaused(false)
         appendEvent(SessionEvent.Resume(System.currentTimeMillis()))
     }
 
@@ -117,12 +132,14 @@ class SleepRecordingService : Service() {
         val id = sessionId ?: run {
             stopSelfNow(); return
         }
-        val now = System.currentTimeMillis()
-        appendEvent(SessionEvent.SessionEnd(now))
+        motionMonitor?.stop()
+        motionMonitor = null
         captureLoop?.stop()
         runCatching { captureThread?.join(2_000L) }
         captureLoop = null
         captureThread = null
+        val now = System.currentTimeMillis()
+        appendEvent(SessionEvent.SessionEnd(now))
         runCatching { repo.finish(id, now) }
         sessionId = null
         paused = false
@@ -141,6 +158,8 @@ class SleepRecordingService : Service() {
         // Defensive: if the service is killed without an explicit stop, at
         // least release resources. The session remains "active" on disk so
         // the user can resume it next time the app is opened.
+        motionMonitor?.stop()
+        motionMonitor = null
         captureLoop?.stop()
         runCatching { captureThread?.join(1_000L) }
         unregisterScreenReceiver()
@@ -151,8 +170,10 @@ class SleepRecordingService : Service() {
     override fun onBind(intent: Intent): IBinder? = null
 
     private fun appendEvent(event: SessionEvent) {
-        sessionId?.let { repo.appendEvent(it, event) }
-        RecordingController.publishEvent(event)
+        synchronized(eventLock) {
+            sessionId?.let { repo.appendEvent(it, event) }
+            RecordingController.publishEvent(event)
+        }
     }
 
     private fun registerScreenReceiver() {

@@ -24,11 +24,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.sondenit.audio.NoiseGroup
+import com.example.sondenit.data.SessionEvent
 import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightSurface
 import com.example.sondenit.ui.theme.OnNight
 import com.example.sondenit.ui.theme.OnNightMuted
 import com.example.sondenit.ui.theme.PinkDawn
+import com.example.sondenit.ui.theme.SkyTeal
 import com.example.sondenit.util.formatTimeOfDay
 
 /**
@@ -44,6 +46,7 @@ fun EventRibbon(
     sessionEnd: Long,
     groups: List<NoiseGroup>,
     screenOnTimestamps: List<Long>,
+    motionEvents: List<SessionEvent.Motion>,
     pausedRanges: List<LongRange>,
     modifier: Modifier = Modifier,
     title: String,
@@ -130,6 +133,19 @@ fun EventRibbon(
                         start = Offset(x, 0f),
                         end = Offset(x, h),
                         strokeWidth = 2.5f,
+                    )
+                }
+                // Accelerometer movement; wake-like phone movement is stronger.
+                motionEvents.forEach { ev ->
+                    val x = ((ev.timestamp - sessionStart).coerceIn(0, total)).toFloat() / total * w
+                    val color = if (ev.wakeEvent) PinkDawn else SkyTeal
+                    val top = if (ev.wakeEvent) 0f else h * 0.22f
+                    val bottom = if (ev.wakeEvent) h else h * 0.78f
+                    drawLine(
+                        color = color.copy(alpha = if (ev.wakeEvent) 0.95f else 0.75f),
+                        start = Offset(x, top),
+                        end = Offset(x, bottom),
+                        strokeWidth = if (ev.wakeEvent) 3.5f else 2f,
                     )
                 }
                 playheadTimestamp?.let { ts ->

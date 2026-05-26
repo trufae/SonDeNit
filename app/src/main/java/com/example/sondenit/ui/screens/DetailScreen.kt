@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -184,6 +185,9 @@ fun DetailScreen(
     val screenOnTimestamps = remember(events) {
         events.filterIsInstance<SessionEvent.ScreenOn>().map { it.timestamp }
     }
+    val motionEvents = remember(events) {
+        events.filterIsInstance<SessionEvent.Motion>().sortedBy { it.timestamp }
+    }
     val labels = remember { defaultTimelineLabels() }
 
     DisposableEffectOnDispose { player.stop() }
@@ -248,6 +252,7 @@ fun DetailScreen(
                     sessionEnd = sessionEnd,
                     pausedRanges = pausedRanges,
                     screenOnTimestamps = screenOnTimestamps,
+                    motionEvents = motionEvents,
                     labels = labels,
                     playback = playback,
                     playheadTimestamp = playheadTimestamp,
@@ -275,6 +280,7 @@ fun DetailScreen(
                     sessionEnd = sessionEnd,
                     pausedRanges = pausedRanges,
                     screenOnTimestamps = screenOnTimestamps,
+                    motionEvents = motionEvents,
                     labels = labels,
                     playback = playback,
                     playheadTimestamp = playheadTimestamp,
@@ -302,6 +308,7 @@ fun DetailScreen(
                     sessionEnd = sessionEnd,
                     pausedRanges = pausedRanges,
                     screenOnTimestamps = screenOnTimestamps,
+                    motionEvents = motionEvents,
                     labels = labels,
                     playback = playback,
                     playheadTimestamp = playheadTimestamp,
@@ -449,6 +456,7 @@ private fun CompactLayout(
     sessionEnd: Long,
     pausedRanges: List<LongRange>,
     screenOnTimestamps: List<Long>,
+    motionEvents: List<SessionEvent.Motion>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
     playheadTimestamp: Long?,
@@ -491,6 +499,7 @@ private fun CompactLayout(
                     sessionEnd = sessionEnd,
                     groups = significantGroups,
                     screenOnTimestamps = screenOnTimestamps,
+                    motionEvents = motionEvents,
                     pausedRanges = pausedRanges,
                     playheadTimestamp = playheadTimestamp,
                     onSeekTimestamp = { ts ->
@@ -531,6 +540,7 @@ private fun WidePortraitLayout(
     sessionEnd: Long,
     pausedRanges: List<LongRange>,
     screenOnTimestamps: List<Long>,
+    motionEvents: List<SessionEvent.Motion>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
     playheadTimestamp: Long?,
@@ -598,6 +608,7 @@ private fun WidePortraitLayout(
                     sessionEnd = sessionEnd,
                     groups = significantGroups,
                     screenOnTimestamps = screenOnTimestamps,
+                    motionEvents = motionEvents,
                     pausedRanges = pausedRanges,
                     playheadTimestamp = playheadTimestamp,
                     onSeekTimestamp = { ts ->
@@ -636,6 +647,7 @@ private fun SplitLayout(
     sessionEnd: Long,
     pausedRanges: List<LongRange>,
     screenOnTimestamps: List<Long>,
+    motionEvents: List<SessionEvent.Motion>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
     playheadTimestamp: Long?,
@@ -687,6 +699,7 @@ private fun SplitLayout(
                         sessionEnd = sessionEnd,
                         groups = significantGroups,
                         screenOnTimestamps = screenOnTimestamps,
+                        motionEvents = motionEvents,
                         pausedRanges = pausedRanges,
                         playheadTimestamp = playheadTimestamp,
                         onSeekTimestamp = { ts ->
@@ -1524,6 +1537,22 @@ private fun StatsGrid(stats: SessionStats, outerPadding: Dp = SECTION_PAD) {
                 accent = SkyTeal,
                 label = stringResource(R.string.ambient_avg),
                 value = "%.0f dB".format(stats.ambientAvgDb),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StatCard(
+                icon = Icons.Filled.Vibration,
+                accent = SkyTeal,
+                label = stringResource(R.string.movement_events),
+                value = stats.movementEvents.toString(),
+                modifier = Modifier.weight(1f),
+            )
+            StatCard(
+                icon = Icons.Filled.Insights,
+                accent = Lavender,
+                label = stringResource(R.string.wake_movement_events),
+                value = stats.wakeMovementEvents.toString(),
                 modifier = Modifier.weight(1f),
             )
         }

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -92,6 +93,17 @@ fun describe(event: SessionEvent, contextLabels: TimelineLabels): TimelineRowSpe
         event, contextLabels.screenOff, null,
         Icons.Filled.PhoneAndroid, OnNightMuted,
     )
+    is SessionEvent.Motion -> TimelineRowSpec(
+        event = event,
+        title = if (event.wakeEvent) contextLabels.phoneMoved else contextLabels.movement,
+        subtitle = "${formatDurationShort(event.durationMs)} · " +
+            "%.2f m/s2 · %.0f°".format(
+                event.peakAcceleration,
+                event.orientationChangeDeg,
+            ),
+        icon = Icons.Filled.Vibration,
+        accent = if (event.wakeEvent) PinkDawn else SkyTeal,
+    )
     is SessionEvent.AudioChunk -> {
         val (label, color) = describeSound(event.classification)
         TimelineRowSpec(
@@ -115,6 +127,8 @@ data class TimelineLabels(
     val resume: String,
     val screenOn: String,
     val screenOff: String,
+    val movement: String,
+    val phoneMoved: String,
 )
 
 fun describeGroup(group: NoiseGroup): TimelineRowSpec {

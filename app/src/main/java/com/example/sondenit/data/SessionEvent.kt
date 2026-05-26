@@ -7,8 +7,9 @@ import org.json.JSONObject
  * appends are cheap and the file can be parsed line-by-line on read.
  *
  * We deliberately keep the event stream slim: only "interesting" things
- * (state changes, screen events, detected audio chunks). High-frequency
- * RMS samples never hit disk — they live in memory and get summarised.
+ * (state changes, screen events, detected audio chunks, movement bursts).
+ * High-frequency RMS and sensor samples never hit disk — they live in memory
+ * and get summarised.
  */
 sealed class SessionEvent {
     abstract val timestamp: Long
@@ -36,6 +37,22 @@ sealed class SessionEvent {
     }
     data class ScreenOff(override val timestamp: Long) : SessionEvent() {
         override fun toJson() = baseJson("screen_off")
+    }
+    data class Motion(
+        override val timestamp: Long,
+        val durationMs: Long,
+        val peakAcceleration: Float,
+        val avgAcceleration: Float,
+        val orientationChangeDeg: Float,
+        val wakeEvent: Boolean,
+    ) : SessionEvent() {
+        override fun toJson(): JSONObject = baseJson("motion").apply {
+            put("durationMs", durationMs)
+            put("peakAcceleration", peakAcceleration.toDouble())
+            put("avgAcceleration", avgAcceleration.toDouble())
+            put("orientationChangeDeg", orientationChangeDeg.toDouble())
+            put("wakeEvent", wakeEvent)
+        }
     }
     data class AudioChunk(
         override val timestamp: Long,
@@ -70,6 +87,14 @@ sealed class SessionEvent {
                 "resume" -> Resume(ts)
                 "screen_on" -> ScreenOn(ts)
                 "screen_off" -> ScreenOff(ts)
+                "motion" -> Motion(
+                    timestamp = ts,
+                    durationMs = json.optLong("durationMs"),
+                    peakAcceleration = json.optDouble("peakAcceleration", 0.0).toFloat(),
+                    avgAcceleration = json.optDouble("avgAcceleration", 0.0).toFloat(),
+                    orientationChangeDeg = json.optDouble("orientationChangeDeg", 0.0).toFloat(),
+                    wakeEvent = json.optBoolean("wakeEvent", false),
+                )
                 "audio_chunk" -> AudioChunk(
                     timestamp = ts,
                     durationMs = json.optLong("durationMs"),

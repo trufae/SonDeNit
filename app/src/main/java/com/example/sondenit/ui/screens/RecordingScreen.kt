@@ -351,4 +351,6 @@ fun defaultTimelineLabels() = TimelineLabels(
     resume = "Reactivació",
     screenOn = "Pantalla encesa",
     screenOff = "Pantalla apagada",
+    movement = "Moviment detectat",
+    phoneMoved = "Mòbil mogut",
 )
