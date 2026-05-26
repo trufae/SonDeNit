@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.example.sondenit.audio.AudioMath
+import com.example.sondenit.audio.AudioWaveform
 import com.example.sondenit.data.SessionEvent
 import com.example.sondenit.data.SessionRepository
 import com.example.sondenit.data.SleepSession
@@ -51,8 +52,8 @@ object RecordingController {
     private val _startedAt = MutableStateFlow(0L)
     val startedAt: StateFlow<Long> = _startedAt.asStateFlow()
 
-    /** Latest waveform samples (recent rms in dB, normalised −90..0). */
-    private val _waveform = MutableStateFlow(FloatArray(WAVEFORM_LEN))
+    /** Latest waveform samples, normalised for visual activity above ambient noise. */
+    private val _waveform = MutableStateFlow(FloatArray(AudioWaveform.SAMPLE_COUNT))
     val waveform: StateFlow<FloatArray> = _waveform.asStateFlow()
 
     fun startSession(context: Context, repo: SessionRepository): SleepSession {
@@ -106,13 +107,10 @@ object RecordingController {
 
     internal fun publishLevel(rmsDb: Float, ambientDb: Float, capturing: Boolean) {
         _level.value = LevelSnapshot(rmsDb, ambientDb, capturing)
-        // Append a normalised value to the rolling waveform.
-        val norm = ((rmsDb - AudioMath.SILENCE_DB) / -AudioMath.SILENCE_DB).coerceIn(0f, 1f)
-        val arr = _waveform.value
-        val next = FloatArray(arr.size)
-        System.arraycopy(arr, 1, next, 0, arr.size - 1)
-        next[arr.size - 1] = norm
-        _waveform.value = next
+        _waveform.value = AudioWaveform.append(
+            samples = _waveform.value,
+            value = AudioWaveform.visualLevel(rmsDb, ambientDb),
+        )
     }
 
     internal fun publishEvent(event: SessionEvent) {
@@ -129,8 +127,8 @@ object RecordingController {
         _state.value = RecordingState.IDLE
         _activeSession.value = null
         _level.value = LevelSnapshot()
-        _waveform.value = FloatArray(WAVEFORM_LEN)
+        _waveform.value = FloatArray(AudioWaveform.SAMPLE_COUNT)
     }
 
-    const val WAVEFORM_LEN = 96
+    const val WAVEFORM_LEN = AudioWaveform.SAMPLE_COUNT
 }

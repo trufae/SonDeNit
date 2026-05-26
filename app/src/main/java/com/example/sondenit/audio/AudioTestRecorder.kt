@@ -19,7 +19,11 @@ object AudioTestRecorder {
     private const val DURATION_MS = 5_000L
 
     @SuppressLint("MissingPermission")
-    suspend fun record(context: Context, equalizationAmount: Float): File? = withContext(Dispatchers.IO) {
+    suspend fun record(
+        context: Context,
+        equalizationAmount: Float,
+        onLevel: (rmsDb: Float, ambientDb: Float) -> Unit = { _, _ -> },
+    ): File? = withContext(Dispatchers.IO) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
         ) return@withContext null
@@ -33,6 +37,7 @@ object AudioTestRecorder {
         val totalSamples = (SAMPLE_RATE * DURATION_MS / 1000L).toInt()
         val pcm = ShortArray(totalSamples)
         val frame = ShortArray(frameSamples)
+        val gate = NoiseGate()
         var written = 0
         var failed = false
 
@@ -44,6 +49,9 @@ object AudioTestRecorder {
                 if (read > 0) {
                     System.arraycopy(frame, 0, pcm, written, read)
                     written += read
+                    val features = AudioMath.features(frame, read)
+                    gate.process(features.rmsDb, currentlyOpen = false)
+                    onLevel(features.rmsDb, gate.floorDb)
                 } else if (read < 0) {
                     failed = true
                     break

@@ -57,6 +57,9 @@ import com.example.sondenit.R
 import com.example.sondenit.audio.AudioPlayer
 import com.example.sondenit.audio.AudioSettings
 import com.example.sondenit.audio.AudioTestRecorder
+import com.example.sondenit.audio.AudioWaveform
+import com.example.sondenit.service.LevelSnapshot
+import com.example.sondenit.ui.components.Waveform
 import com.example.sondenit.ui.theme.Lavender
 import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightDeep
@@ -85,6 +88,8 @@ fun SettingsScreen(
     var isRecording by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var testFile by remember { mutableStateOf<File?>(null) }
+    var testWaveform by remember { mutableStateOf(FloatArray(AudioWaveform.SAMPLE_COUNT)) }
+    var testLevel by remember { mutableStateOf(LevelSnapshot()) }
     var statusText by remember { mutableStateOf<String?>(null) }
     val readyText = stringResource(R.string.settings_test_ready)
     val errorText = stringResource(R.string.settings_test_error)
@@ -124,6 +129,8 @@ fun SettingsScreen(
                     isRecording = isRecording,
                     isPlaying = isPlaying,
                     hasRecording = testFile != null,
+                    waveform = testWaveform,
+                    level = testLevel,
                     statusText = statusText,
                     onRequestMic = onRequestMic,
                     onRecord = {
@@ -132,9 +139,25 @@ fun SettingsScreen(
                             isRecording = true
                             isPlaying = false
                             statusText = null
+                            testWaveform = FloatArray(AudioWaveform.SAMPLE_COUNT)
+                            testLevel = LevelSnapshot(capturing = true)
                             player.stop()
-                            testFile = AudioTestRecorder.record(context, equalizationAmount)
+                            testFile = AudioTestRecorder.record(context, equalizationAmount) { rmsDb, ambientDb ->
+                                scope.launch {
+                                    if (!isRecording) return@launch
+                                    testWaveform = AudioWaveform.append(
+                                        samples = testWaveform,
+                                        value = AudioWaveform.visualLevel(rmsDb, ambientDb),
+                                    )
+                                    testLevel = LevelSnapshot(
+                                        rmsDb = rmsDb,
+                                        ambientDb = ambientDb,
+                                        capturing = true,
+                                    )
+                                }
+                            }
                             statusText = if (testFile != null) readyText else errorText
+                            testLevel = testLevel.copy(capturing = false)
                             isRecording = false
                         }
                     },
@@ -303,6 +326,8 @@ private fun TestRecordingPanel(
     isRecording: Boolean,
     isPlaying: Boolean,
     hasRecording: Boolean,
+    waveform: FloatArray,
+    level: LevelSnapshot,
     statusText: String?,
     onRequestMic: () -> Unit,
     onRecord: () -> Unit,
@@ -337,6 +362,12 @@ private fun TestRecordingPanel(
                 Text(stringResource(R.string.settings_mic_permission_button))
             }
         } else {
+            TestWaveformPreview(
+                samples = waveform,
+                level = level,
+                isRecording = isRecording,
+            )
+            Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = onRecord,
@@ -384,6 +415,52 @@ private fun TestRecordingPanel(
         statusText?.let {
             Spacer(Modifier.height(10.dp))
             Text(text = it, color = OnNightMuted, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun TestWaveformPreview(
+    samples: FloatArray,
+    level: LevelSnapshot,
+    isRecording: Boolean,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(92.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = NightDeep.copy(alpha = 0.4f),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isRecording) MoonGlow.copy(alpha = 0.5f) else SkyTeal.copy(alpha = 0.18f),
+        ),
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Waveform(
+                samples = samples,
+                capturing = isRecording,
+            )
+            Text(
+                text = "%.0f dB".format(level.ambientDb) + "  " +
+                    stringResource(R.string.ambient_noise),
+                color = OnNightMuted,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp),
+            )
+            if (isRecording) {
+                Text(
+                    text = stringResource(R.string.settings_test_recording),
+                    color = MoonGlow,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(10.dp),
+                )
+            }
         }
     }
 }

@@ -10,9 +10,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
 import com.example.sondenit.ui.theme.Lavender
 import com.example.sondenit.ui.theme.MoonGlow
+import com.example.sondenit.ui.theme.PinkDawn
 import com.example.sondenit.ui.theme.SkyTeal
+import kotlin.math.pow
 
 /**
  * Live oscilloscope-style waveform driven by the rolling RMS samples
@@ -34,29 +37,58 @@ fun Waveform(
         val h = size.height
         val midY = h / 2f
         val barWidth = (w / samples.size).coerceAtLeast(1f)
-        val gradient = Brush.verticalGradient(
-            colors = listOf(accent.copy(alpha = 0.6f), Lavender.copy(alpha = 0.9f), accent.copy(alpha = 0.6f))
-        )
-        for (i in samples.indices) {
-            val v = samples[i].coerceIn(0f, 1f)
-            // Boost mid-range so quiet ambient is still visible but not noisy.
-            val amp = (v * 1.4f - 0.05f).coerceIn(0f, 1f)
-            val barHeight = amp * (h * 0.9f)
-            val x = i * barWidth + barWidth / 2f
-            drawLine(
-                brush = gradient,
-                start = Offset(x, midY - barHeight / 2f),
-                end = Offset(x, midY + barHeight / 2f),
-                strokeWidth = (barWidth * 0.5f).coerceAtLeast(2f),
-                cap = StrokeCap.Round,
-            )
-        }
-        // Subtle baseline.
+        val stroke = (barWidth * 0.48f).coerceIn(2f, 7f)
         drawLine(
-            color = Color.White.copy(alpha = 0.06f),
+            color = Color.White.copy(alpha = if (capturing) 0.1f else 0.06f),
             start = Offset(0f, midY),
             end = Offset(w, midY),
             strokeWidth = 1f,
         )
+
+        for (i in samples.indices) {
+            val v = samples[i].coerceIn(0f, 1f)
+            val amp = shapedAmplitude(v)
+            val barHeight = (h * 0.025f) + amp * (h * 0.84f)
+            val x = i * barWidth + barWidth / 2f
+            val color = waveformColor(v, accent)
+            val alpha = if (capturing) 0.9f else 0.62f
+            val gradient = Brush.verticalGradient(
+                colors = listOf(
+                    color.copy(alpha = 0.28f + v * 0.26f),
+                    Lavender.copy(alpha = 0.38f + v * 0.42f),
+                    color.copy(alpha = alpha),
+                ),
+                startY = midY - barHeight / 2f,
+                endY = midY + barHeight / 2f,
+            )
+            if (v > 0.08f) {
+                drawLine(
+                    color = color.copy(alpha = 0.08f + v * 0.16f),
+                    start = Offset(x, midY - barHeight * 0.58f),
+                    end = Offset(x, midY + barHeight * 0.58f),
+                    strokeWidth = stroke * (2.1f + v),
+                    cap = StrokeCap.Round,
+                )
+            }
+            drawLine(
+                brush = gradient,
+                start = Offset(x, midY - barHeight / 2f),
+                end = Offset(x, midY + barHeight / 2f),
+                strokeWidth = stroke * (0.72f + v * 0.32f),
+                cap = StrokeCap.Round,
+            )
+        }
     }
+}
+
+private fun shapedAmplitude(value: Float): Float {
+    val x = value.coerceIn(0f, 1f)
+    return x.pow(0.72f)
+}
+
+private fun waveformColor(value: Float, accent: Color): Color {
+    val cool = lerp(SkyTeal, Lavender, 0.34f)
+    val active = lerp(cool, accent, 0.42f)
+    val warm = lerp(active, MoonGlow, (value * 1.15f).coerceIn(0f, 1f))
+    return lerp(warm, PinkDawn, ((value - 0.68f) / 0.32f).coerceIn(0f, 1f))
 }
