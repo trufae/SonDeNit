@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -159,127 +162,133 @@ private fun AppRoot() {
     }
 
     Box(modifier = Modifier.fillMaxSize().background(NightDeep)) {
-        when (val s = screen) {
-            Screen.Home -> {
-                if (!micGranted && permissionDeniedSticky) {
-                    PermissionDeniedScreen(onRetry = {
-                        permissionDeniedSticky = false
-                        micLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    })
-                } else {
-                    HomeScreen(
-                        repo = repo,
-                        sessions = sessions,
-                        activeSession = activeSession ?: repo.activeSession(),
-                        onPrimaryAction = {
-                            if (!micGranted) {
-                                pendingPermissionStart = true
-                                micLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing),
+        ) {
+            when (val s = screen) {
+                Screen.Home -> {
+                    if (!micGranted && permissionDeniedSticky) {
+                        PermissionDeniedScreen(onRetry = {
+                            permissionDeniedSticky = false
+                            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        })
+                    } else {
+                        HomeScreen(
+                            repo = repo,
+                            sessions = sessions,
+                            activeSession = activeSession ?: repo.activeSession(),
+                            onPrimaryAction = {
+                                if (!micGranted) {
+                                    pendingPermissionStart = true
+                                    micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                } else {
+                                    beginSessionStart()
                                 }
-                            } else {
-                                beginSessionStart()
-                            }
-                        },
-                        onOpenBreathing = { screen = Screen.Breathing },
-                        onOpenSession = { sess ->
-                            screen = if (sess.endedAt == null) Screen.Recording
-                                     else Screen.Detail(sess.id)
-                        },
-                        onOpenSettings = { screen = Screen.Settings },
-                        onRename = { sess, newName ->
-                            repo.rename(sess.id, newName)
-                            sessions = repo.listSessions()
-                        },
-                        onDelete = { sess ->
-                            repo.delete(sess.id)
-                            sessions = repo.listSessions()
-                        },
-                    )
-                }
-            }
-            Screen.Breathing -> {
-                BreathingScreen(
-                    onClose = { screen = Screen.Home },
-                )
-            }
-            Screen.Countdown -> {
-                StartCountdownScreen(
-                    delaySeconds = recordingStartDelaySeconds,
-                    onFinished = {
-                        startSession(repo, context, screen) { newScreen -> screen = newScreen }
-                        sessions = repo.listSessions()
-                    },
-                    onCancel = {
-                        screen = Screen.Home
-                        sessions = repo.listSessions()
-                    },
-                )
-            }
-            Screen.Settings -> {
-                SettingsScreen(
-                    micGranted = micGranted,
-                    equalizationAmount = equalizationAmount,
-                    recordingStartDelaySeconds = recordingStartDelaySeconds,
-                    onEqualizationChange = { amount ->
-                        equalizationAmount = amount
-                        AudioSettings.setEqualizationAmount(context.applicationContext, amount)
-                    },
-                    onRecordingStartDelayChange = { seconds ->
-                        recordingStartDelaySeconds = seconds
-                        AudioSettings.setRecordingStartDelaySeconds(context.applicationContext, seconds)
-                    },
-                    onRequestMic = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-                    onBack = { screen = Screen.Home },
-                )
-            }
-            Screen.Recording -> {
-                val current = activeSession ?: repo.activeSession()
-                if (current == null || state == RecordingState.IDLE) {
-                    // The session ended elsewhere — bounce back to home.
-                    LaunchedEffect(Unit) {
-                        sessions = repo.listSessions()
-                        screen = Screen.Home
+                            },
+                            onOpenBreathing = { screen = Screen.Breathing },
+                            onOpenSession = { sess ->
+                                screen = if (sess.endedAt == null) Screen.Recording
+                                         else Screen.Detail(sess.id)
+                            },
+                            onOpenSettings = { screen = Screen.Settings },
+                            onRename = { sess, newName ->
+                                repo.rename(sess.id, newName)
+                                sessions = repo.listSessions()
+                            },
+                            onDelete = { sess ->
+                                repo.delete(sess.id)
+                                sessions = repo.listSessions()
+                            },
+                        )
                     }
-                } else {
-                    RecordingScreen(
-                        session = current,
-                        state = state,
-                        level = level,
-                        waveform = waveform,
-                        recentEvents = recentEvents,
-                        chunkCount = chunkCount,
-                        onPause = { RecordingController.pause(context) },
-                        onResume = { RecordingController.resume(context) },
-                        onStop = { RecordingController.stop(context) },
-                        onBack = { screen = Screen.Home; sessions = repo.listSessions() },
+                }
+                Screen.Breathing -> {
+                    BreathingScreen(
+                        onClose = { screen = Screen.Home },
                     )
                 }
-            }
-            is Screen.Detail -> {
-                val session = remember(s.sessionId, sessions) { repo.readSession(s.sessionId) }
-                if (session == null) {
-                    LaunchedEffect(Unit) { screen = Screen.Home }
-                } else {
-                    DetailScreen(
-                        repo = repo,
-                        session = session,
-                        onBack = { screen = Screen.Home; sessions = repo.listSessions() },
-                        onRename = { sess, newName ->
-                            repo.rename(sess.id, newName)
+                Screen.Countdown -> {
+                    StartCountdownScreen(
+                        delaySeconds = recordingStartDelaySeconds,
+                        onFinished = {
+                            startSession(repo, context, screen) { newScreen -> screen = newScreen }
                             sessions = repo.listSessions()
                         },
-                        onUpdateNotes = { sess, notes ->
-                            repo.updateNotes(sess.id, notes)
+                        onCancel = {
+                            screen = Screen.Home
                             sessions = repo.listSessions()
                         },
-                        onDelete = { sess ->
-                            repo.delete(sess.id)
+                    )
+                }
+                Screen.Settings -> {
+                    SettingsScreen(
+                        micGranted = micGranted,
+                        equalizationAmount = equalizationAmount,
+                        recordingStartDelaySeconds = recordingStartDelaySeconds,
+                        onEqualizationChange = { amount ->
+                            equalizationAmount = amount
+                            AudioSettings.setEqualizationAmount(context.applicationContext, amount)
+                        },
+                        onRecordingStartDelayChange = { seconds ->
+                            recordingStartDelaySeconds = seconds
+                            AudioSettings.setRecordingStartDelaySeconds(context.applicationContext, seconds)
+                        },
+                        onRequestMic = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                        onBack = { screen = Screen.Home },
+                    )
+                }
+                Screen.Recording -> {
+                    val current = activeSession ?: repo.activeSession()
+                    if (current == null || state == RecordingState.IDLE) {
+                        // The session ended elsewhere — bounce back to home.
+                        LaunchedEffect(Unit) {
                             sessions = repo.listSessions()
                             screen = Screen.Home
-                        },
-                    )
+                        }
+                    } else {
+                        RecordingScreen(
+                            session = current,
+                            state = state,
+                            level = level,
+                            waveform = waveform,
+                            recentEvents = recentEvents,
+                            chunkCount = chunkCount,
+                            onPause = { RecordingController.pause(context) },
+                            onResume = { RecordingController.resume(context) },
+                            onStop = { RecordingController.stop(context) },
+                            onBack = { screen = Screen.Home; sessions = repo.listSessions() },
+                        )
+                    }
+                }
+                is Screen.Detail -> {
+                    val session = remember(s.sessionId, sessions) { repo.readSession(s.sessionId) }
+                    if (session == null) {
+                        LaunchedEffect(Unit) { screen = Screen.Home }
+                    } else {
+                        DetailScreen(
+                            repo = repo,
+                            session = session,
+                            onBack = { screen = Screen.Home; sessions = repo.listSessions() },
+                            onRename = { sess, newName ->
+                                repo.rename(sess.id, newName)
+                                sessions = repo.listSessions()
+                            },
+                            onUpdateNotes = { sess, notes ->
+                                repo.updateNotes(sess.id, notes)
+                                sessions = repo.listSessions()
+                            },
+                            onDelete = { sess ->
+                                repo.delete(sess.id)
+                                sessions = repo.listSessions()
+                                screen = Screen.Home
+                            },
+                        )
+                    }
                 }
             }
         }
