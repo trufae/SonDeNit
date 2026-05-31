@@ -11,32 +11,43 @@ class AudioPlayer {
 
     private var player: MediaPlayer? = null
     private var playingFile: File? = null
-    private var onComplete: (() -> Unit)? = null
 
     val currentlyPlaying: File? get() = playingFile
 
     fun play(file: File, onFinished: () -> Unit) {
         stop()
-        val mp = MediaPlayer().apply {
-            setDataSource(file.absolutePath)
-            setOnCompletionListener {
+        val mp = MediaPlayer()
+        try {
+            mp.setDataSource(file.absolutePath)
+            mp.setOnCompletionListener { completedPlayer ->
+                if (player !== completedPlayer) {
+                    runCatching { completedPlayer.release() }
+                    return@setOnCompletionListener
+                }
+                player = null
                 playingFile = null
-                onComplete?.invoke()
-                onComplete = null
+                runCatching { completedPlayer.release() }
+                onFinished()
             }
-            prepare()
-            start()
+            mp.prepare()
+            player = mp
+            playingFile = file
+            mp.start()
+        } catch (t: Throwable) {
+            if (player === mp) {
+                player = null
+                playingFile = null
+            }
+            mp.release()
+            throw t
         }
-        player = mp
-        playingFile = file
-        onComplete = onFinished
     }
 
     fun stop() {
-        player?.runCatching { if (isPlaying) stop() }
-        player?.release()
+        val current = player ?: return
         player = null
         playingFile = null
-        onComplete = null
+        current.runCatching { if (isPlaying) stop() }
+        current.release()
     }
 }

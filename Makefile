@@ -29,3 +29,6 @@ release:
 		--out $(APK_NAME) \
 		$(ALIGNED_APK)
 	$(APKSIGNER) verify --verbose $(APK_NAME)
+
+install:
+	adb install $(APK_NAME)
