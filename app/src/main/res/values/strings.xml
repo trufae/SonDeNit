@@ -20,8 +20,8 @@
     <string name="breathing_step_seconds">%1$d s passats · %2$d s resten</string>
     <string name="breathing_total_left">%1$d s per acabar</string>
     <string name="breathing_safety_note">Si notes mareig, falta d\'aire, dolor o incomoditat, interromp l\'exercici i respira amb normalitat.</string>
-    <string name="breathing_interrupt">Interromp l\'exercici</string>
-    <string name="breathing_done">Fet</string>
+    <string name="breathing_interrupt">Interrompir l\'exercici</string>
+    <string name="breathing_done">Completat!</string>
     <string name="breathing_complete_message">Exercici completat. Respira amb normalitat i mantén el ritme tranquil.</string>
     <string name="close">Tanca</string>
     <string name="repeat_exercise">Repeteix</string>

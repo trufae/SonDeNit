@@ -2,6 +2,7 @@ package com.example.sondenit.ui.screens
 
 import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -29,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.getValue
@@ -41,6 +41,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -49,11 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.sondenit.R
-import com.example.sondenit.audio.SpaTonePlayer
 import com.example.sondenit.ui.theme.NightDeep
 import com.example.sondenit.ui.theme.OnNight
 import com.example.sondenit.ui.theme.OnNightMuted
@@ -93,8 +91,6 @@ private suspend fun runBreathAnimation(
 fun BreathingScreen(
     onClose: () -> Unit,
 ) {
-    val player = remember { SpaTonePlayer() }
-    val lifecycleOwner = LocalLifecycleOwner.current
     var circleProgress by remember { mutableFloatStateOf(0f) }
     var phaseProgress by remember { mutableFloatStateOf(0f) }
     var phaseElapsedMillis by remember { mutableIntStateOf(0) }
@@ -104,27 +100,15 @@ fun BreathingScreen(
     var complete by remember { mutableStateOf(false) }
     var runId by remember { mutableIntStateOf(0) }
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    DisposableEffect(lifecycleOwner, player) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> player.start()
-                Lifecycle.Event.ON_PAUSE -> player.stop()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        player.start()
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            player.stop()
-        }
-    }
+    val holdGlowAlpha by animateFloatAsState(
+        targetValue = if (phase == BreathPhase.Hold && !complete) 1f else 0f,
+        animationSpec = tween(durationMillis = 700),
+        label = "breathingHoldCornerGlow",
+    )
 
     LaunchedEffect(runId) {
         fun setBreathProgress(progress: Float) {
             circleProgress = progress.coerceIn(0f, 1f)
-            player.setBreathLevel(circleProgress)
         }
 
         fun setTimedProgress(phaseStartMillis: Int, elapsedMillis: Int, progress: Float) {
@@ -167,7 +151,6 @@ fun BreathingScreen(
         complete = true
         setBreathProgress(0f)
         setTimedProgress(TotalExerciseMillis, 0, 1f)
-        player.setBreathLevel(0.15f)
     }
 
     Box(
@@ -178,6 +161,32 @@ fun BreathingScreen(
                     listOf(Color(0xFF061427), Color(0xFF102B4B), NightDeep),
                 )
             )
+            .drawBehind {
+                if (holdGlowAlpha > 0f) {
+                    val radius = size.minDimension * 0.72f
+                    val glow = Color(0xFF79C7FF)
+                    listOf(
+                        Offset.Zero,
+                        Offset(size.width, 0f),
+                        Offset(0f, size.height),
+                        Offset(size.width, size.height),
+                    ).forEach { center ->
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    glow.copy(alpha = 0.36f * holdGlowAlpha),
+                                    glow.copy(alpha = 0.12f * holdGlowAlpha),
+                                    Color.Transparent,
+                                ),
+                                center = center,
+                                radius = radius,
+                            ),
+                            radius = radius,
+                            center = center,
+                        )
+                    }
+                }
+            }
             .padding(24.dp),
     ) {
         IconButton(
@@ -343,8 +352,8 @@ private fun LandscapeBreathingContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                baseSize = 132.dp,
-                growthSize = 96.dp,
+                baseSize = 64.dp,
+                growthSize = 164.dp,
             )
             if (!complete) {
                 BreathingProgressBars(
@@ -418,8 +427,8 @@ private fun BreathingBall(
     progress: Float,
     phase: BreathPhase,
     modifier: Modifier = Modifier.size(264.dp),
-    baseSize: Dp = 156.dp,
-    growthSize: Dp = 104.dp,
+    baseSize: Dp = 72.dp,
+    growthSize: Dp = 188.dp,
 ) {
     val circleSize = baseSize + growthSize * progress
     val phaseColor by animateColorAsState(
