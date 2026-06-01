@@ -1,5 +1,6 @@
 package com.example.sondenit.ui.screens
 
+import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -99,6 +101,45 @@ fun SettingsScreen(
     var statusText by remember { mutableStateOf<String?>(null) }
     val readyText = stringResource(R.string.settings_test_ready)
     val errorText = stringResource(R.string.settings_test_error)
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val startTestRecording = recordAction@{
+        if (!micGranted || isRecording) return@recordAction
+        scope.launch {
+            isRecording = true
+            isPlaying = false
+            statusText = null
+            testWaveform = FloatArray(AudioWaveform.SAMPLE_COUNT)
+            testLevel = LevelSnapshot(capturing = true)
+            player.stop()
+            testFile = AudioTestRecorder.record(context, equalizationAmount) { rmsDb, ambientDb ->
+                scope.launch {
+                    if (!isRecording) return@launch
+                    testWaveform = AudioWaveform.append(
+                        samples = testWaveform,
+                        value = AudioWaveform.visualLevel(rmsDb, ambientDb),
+                    )
+                    testLevel = LevelSnapshot(
+                        rmsDb = rmsDb,
+                        ambientDb = ambientDb,
+                        capturing = true,
+                    )
+                }
+            }
+            statusText = if (testFile != null) readyText else errorText
+            testLevel = testLevel.copy(capturing = false)
+            isRecording = false
+        }
+    }
+    val toggleTestPlayback = playbackAction@{
+        val file = testFile ?: return@playbackAction
+        if (isPlaying) {
+            player.stop()
+            isPlaying = false
+        } else {
+            player.play(file, playbackAmplificationAmount) { isPlaying = false }
+            isPlaying = true
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose { player.stop() }
@@ -113,84 +154,110 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(NightDeep, NightMid, NightDeep))),
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = topPadding, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item {
-                SettingsTopBar(onBack = onBack)
+        if (isLandscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 20.dp, end = 20.dp, top = topPadding, bottom = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    item {
+                        SettingsTopBar(onBack = onBack)
+                    }
+                    item {
+                        EqualizationPanel(
+                            amount = equalizationAmount,
+                            onChange = onEqualizationChange,
+                        )
+                    }
+                    item {
+                        PlaybackAmplificationPanel(
+                            amount = playbackAmplificationAmount,
+                            onChange = onPlaybackAmplificationChange,
+                        )
+                    }
+                    item {
+                        RecordingStartDelayPanel(
+                            delaySeconds = recordingStartDelaySeconds,
+                            onDelayChange = onRecordingStartDelayChange,
+                        )
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    item {
+                        TestRecordingPanel(
+                            micGranted = micGranted,
+                            isRecording = isRecording,
+                            isPlaying = isPlaying,
+                            hasRecording = testFile != null,
+                            waveform = testWaveform,
+                            level = testLevel,
+                            statusText = statusText,
+                            onRequestMic = onRequestMic,
+                            onRecord = startTestRecording,
+                            onPlayToggle = toggleTestPlayback,
+                        )
+                    }
+                    item {
+                        PhaseExplanationPanel()
+                    }
+                }
             }
-            item {
-                EqualizationPanel(
-                    amount = equalizationAmount,
-                    onChange = onEqualizationChange,
-                )
-            }
-            item {
-                PlaybackAmplificationPanel(
-                    amount = playbackAmplificationAmount,
-                    onChange = onPlaybackAmplificationChange,
-                )
-            }
-            item {
-                RecordingStartDelayPanel(
-                    delaySeconds = recordingStartDelaySeconds,
-                    onDelayChange = onRecordingStartDelayChange,
-                )
-            }
-            item {
-                TestRecordingPanel(
-                    micGranted = micGranted,
-                    isRecording = isRecording,
-                    isPlaying = isPlaying,
-                    hasRecording = testFile != null,
-                    waveform = testWaveform,
-                    level = testLevel,
-                    statusText = statusText,
-                    onRequestMic = onRequestMic,
-                    onRecord = {
-                        if (!micGranted || isRecording) return@TestRecordingPanel
-                        scope.launch {
-                            isRecording = true
-                            isPlaying = false
-                            statusText = null
-                            testWaveform = FloatArray(AudioWaveform.SAMPLE_COUNT)
-                            testLevel = LevelSnapshot(capturing = true)
-                            player.stop()
-                            testFile = AudioTestRecorder.record(context, equalizationAmount) { rmsDb, ambientDb ->
-                                scope.launch {
-                                    if (!isRecording) return@launch
-                                    testWaveform = AudioWaveform.append(
-                                        samples = testWaveform,
-                                        value = AudioWaveform.visualLevel(rmsDb, ambientDb),
-                                    )
-                                    testLevel = LevelSnapshot(
-                                        rmsDb = rmsDb,
-                                        ambientDb = ambientDb,
-                                        capturing = true,
-                                    )
-                                }
-                            }
-                            statusText = if (testFile != null) readyText else errorText
-                            testLevel = testLevel.copy(capturing = false)
-                            isRecording = false
-                        }
-                    },
-                    onPlayToggle = {
-                        val file = testFile ?: return@TestRecordingPanel
-                        if (isPlaying) {
-                            player.stop()
-                            isPlaying = false
-                        } else {
-                            player.play(file, playbackAmplificationAmount) { isPlaying = false }
-                            isPlaying = true
-                        }
-                    },
-                )
-            }
-            item {
-                PhaseExplanationPanel()
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = topPadding, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                item {
+                    SettingsTopBar(onBack = onBack)
+                }
+                item {
+                    EqualizationPanel(
+                        amount = equalizationAmount,
+                        onChange = onEqualizationChange,
+                    )
+                }
+                item {
+                    PlaybackAmplificationPanel(
+                        amount = playbackAmplificationAmount,
+                        onChange = onPlaybackAmplificationChange,
+                    )
+                }
+                item {
+                    RecordingStartDelayPanel(
+                        delaySeconds = recordingStartDelaySeconds,
+                        onDelayChange = onRecordingStartDelayChange,
+                    )
+                }
+                item {
+                    TestRecordingPanel(
+                        micGranted = micGranted,
+                        isRecording = isRecording,
+                        isPlaying = isPlaying,
+                        hasRecording = testFile != null,
+                        waveform = testWaveform,
+                        level = testLevel,
+                        statusText = statusText,
+                        onRequestMic = onRequestMic,
+                        onRecord = startTestRecording,
+                        onPlayToggle = toggleTestPlayback,
+                    )
+                }
+                item {
+                    PhaseExplanationPanel()
+                }
             }
         }
     }
@@ -427,11 +494,16 @@ private fun TestRecordingPanel(
                 isRecording = isRecording,
             )
             Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Button(
                     onClick = onRecord,
                     enabled = !isRecording,
+                    modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(18.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MoonGlow, contentColor = NightDeep),
                 ) {
                     if (isRecording) {
@@ -453,7 +525,9 @@ private fun TestRecordingPanel(
                 OutlinedButton(
                     onClick = onPlayToggle,
                     enabled = hasRecording && !isRecording,
+                    modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(18.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Filled.Stop else Icons.Filled.PlayArrow,
