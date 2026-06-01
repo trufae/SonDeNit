@@ -103,6 +103,7 @@ import com.example.sondenit.ui.theme.SkyTeal
 import com.example.sondenit.util.formatDateLong
 import com.example.sondenit.util.formatDurationShort
 import com.example.sondenit.util.formatTimeOfDay
+import com.example.sondenit.util.formatTimeOfDayLong
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -203,11 +204,16 @@ fun DetailScreen(
     val playheadTimestamp = playback?.timestamp ?: selectedTimestamp ?: mapTimestamp
 
     val onPlayGroup: (NoiseGroup) -> Unit = { group ->
+        val chunks = if (playback != null) {
+            audioChunksFromGroupStart(audioChunks, group)
+        } else {
+            group.chunks
+        }
         playAudioChunks(
             player = player,
             sessionDir = sessionDir,
             playbackAmplificationAmount = playbackAmplificationAmount,
-            chunks = group.chunks,
+            chunks = chunks,
             onStarted = { chunk ->
                 playback = PlaybackState(chunk.file, chunk.timestamp)
                 mapTimestamp = chunk.timestamp
@@ -274,8 +280,10 @@ fun DetailScreen(
                     labels = labels,
                     playback = playback,
                     selectedTimestamp = selectedTimestamp,
+                    audioCount = audioChunks.size,
                     playheadTimestamp = playheadTimestamp,
                     onPlayGroup = onPlayGroup,
+                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
                     onMapSeek = {
                         mapTimestamp = it
@@ -305,8 +313,10 @@ fun DetailScreen(
                     labels = labels,
                     playback = playback,
                     selectedTimestamp = selectedTimestamp,
+                    audioCount = audioChunks.size,
                     playheadTimestamp = playheadTimestamp,
                     onPlayGroup = onPlayGroup,
+                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
                     onMapSeek = {
                         mapTimestamp = it
@@ -336,8 +346,10 @@ fun DetailScreen(
                     labels = labels,
                     playback = playback,
                     selectedTimestamp = selectedTimestamp,
+                    audioCount = audioChunks.size,
                     playheadTimestamp = playheadTimestamp,
                     onPlayGroup = onPlayGroup,
+                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
                     onMapSeek = {
                         mapTimestamp = it
@@ -505,8 +517,10 @@ private fun CompactLayout(
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
     selectedTimestamp: Long?,
+    audioCount: Int,
     playheadTimestamp: Long?,
     onPlayGroup: (NoiseGroup) -> Unit,
+    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
     onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
@@ -576,6 +590,8 @@ private fun CompactLayout(
             labels = labels,
             playback = playback,
             selectedTimestamp = selectedTimestamp,
+            audioCount = audioCount,
+            onPlayAllAudio = onPlayAllAudio,
             onPlayGroup = onPlayGroup,
             onStopPlayback = onStopPlayback,
             onEditAudioRow = onEditAudioRow,
@@ -598,8 +614,10 @@ private fun WidePortraitLayout(
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
     selectedTimestamp: Long?,
+    audioCount: Int,
     playheadTimestamp: Long?,
     onPlayGroup: (NoiseGroup) -> Unit,
+    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
     onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
@@ -688,6 +706,8 @@ private fun WidePortraitLayout(
             labels = labels,
             playback = playback,
             selectedTimestamp = selectedTimestamp,
+            audioCount = audioCount,
+            onPlayAllAudio = onPlayAllAudio,
             onPlayGroup = onPlayGroup,
             onStopPlayback = onStopPlayback,
             onEditAudioRow = onEditAudioRow,
@@ -710,8 +730,10 @@ private fun SplitLayout(
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
     selectedTimestamp: Long?,
+    audioCount: Int,
     playheadTimestamp: Long?,
     onPlayGroup: (NoiseGroup) -> Unit,
+    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
     onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
@@ -797,6 +819,8 @@ private fun SplitLayout(
                 labels = labels,
                 playback = playback,
                 selectedTimestamp = selectedTimestamp,
+                audioCount = audioCount,
+                onPlayAllAudio = onPlayAllAudio,
                 onPlayGroup = onPlayGroup,
                 onStopPlayback = onStopPlayback,
                 onEditAudioRow = onEditAudioRow,
@@ -813,6 +837,8 @@ private fun LazyListScope.timelineSection(
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
     selectedTimestamp: Long?,
+    audioCount: Int,
+    onPlayAllAudio: () -> Unit,
     onPlayGroup: (NoiseGroup) -> Unit,
     onStopPlayback: () -> Unit,
     onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
@@ -820,6 +846,14 @@ private fun LazyListScope.timelineSection(
 ) {
     item {
         Spacer(Modifier.height(20.dp))
+        TimelinePlaybackControl(
+            audioCount = audioCount,
+            currentTimestamp = playback?.timestamp,
+            isPlaying = playback != null,
+            onPlayAll = onPlayAllAudio,
+            onStop = onStopPlayback,
+        )
+        Spacer(Modifier.height(12.dp))
         Text(
             text = androidx.compose.ui.res.stringResource(R.string.timeline),
             color = OnNight,
@@ -1040,6 +1074,72 @@ private fun soundClassColor(klass: SoundClass): Color = when (klass) {
     SoundClass.UNKNOWN -> OnNightMuted
 }
 
+@Composable
+private fun TimelinePlaybackControl(
+    audioCount: Int,
+    currentTimestamp: Long?,
+    isPlaying: Boolean,
+    onPlayAll: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val enabled = audioCount > 0
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TIMELINE_PAD, vertical = 4.dp),
+        color = NightSurface,
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val accent = if (enabled) MoonGlow else OnNightMuted
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .background(accent.copy(alpha = if (enabled) 0.95f else 0.25f), RoundedCornerShape(50))
+                    .clickable(enabled = enabled) {
+                        if (isPlaying) onStop() else onPlayAll()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPlaying)
+                        stringResource(R.string.stop_chunk)
+                    else stringResource(R.string.play_all_audio),
+                    tint = NightDeep,
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.play_all_audio),
+                    color = OnNight,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = when {
+                        currentTimestamp != null -> stringResource(
+                            R.string.now_playing_audio_time,
+                            formatTimeOfDayLong(currentTimestamp),
+                        )
+                        enabled -> stringResource(R.string.audio_recording_count, audioCount)
+                        else -> stringResource(R.string.no_audio_recorded)
+                    },
+                    color = if (currentTimestamp != null) MoonGlow else OnNightMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
 // ── data + helpers ─────────────────────────────────────────────────────────
 
 sealed interface TimelineRowData {
@@ -1063,6 +1163,15 @@ private fun buildTimelineRows(
     for (g in groups) rows.add(TimelineRowData.Group(g))
     rows.sortBy { it.timestamp }
     return rows
+}
+
+private fun audioChunksFromGroupStart(
+    audioChunks: List<SessionEvent.AudioChunk>,
+    group: NoiseGroup,
+): List<SessionEvent.AudioChunk> {
+    val firstChunk = group.chunks.firstOrNull() ?: return emptyList()
+    val startIndex = audioChunks.indexOfFirst { it.file == firstChunk.file }
+    return if (startIndex >= 0) audioChunks.drop(startIndex) else group.chunks
 }
 
 private fun playAudioChunks(
