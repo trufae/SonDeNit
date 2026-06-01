@@ -50,11 +50,12 @@ fun SessionRow(
     qualityScore: Int?,
     phaseDurations: Map<SleepPhase, Long>?,
     isActive: Boolean,
+    isSelected: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
     Surface(
-        color = if (isActive) NightSurfaceHigh else NightSurface,
+        color = if (isActive || isSelected) NightSurfaceHigh else NightSurface,
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier
             .fillMaxWidth()

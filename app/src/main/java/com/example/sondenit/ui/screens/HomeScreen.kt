@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -74,7 +77,11 @@ import com.example.sondenit.ui.theme.OnNight
 import com.example.sondenit.ui.theme.OnNightMuted
 import com.example.sondenit.ui.theme.PinkDawn
 import com.example.sondenit.ui.theme.SkyTeal
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+private const val PortraitFirstSessionItemIndex = 4
+private const val LandscapeFirstSessionItemIndex = 1
 
 @Composable
 fun HomeScreen(
@@ -90,6 +97,7 @@ fun HomeScreen(
 ) {
     var renaming by rememberSaveable(stateSaver = sessionIdSaver) { mutableStateOf<String?>(null) }
     var deleting by rememberSaveable(stateSaver = sessionIdSaver) { mutableStateOf<String?>(null) }
+    var selectedPhaseSessionId by rememberSaveable(stateSaver = sessionIdSaver) { mutableStateOf<String?>(null) }
     val phaseHistory = remember(sessions) {
         sessions
             .filter { it.endedAt != null }
@@ -120,6 +128,8 @@ fun HomeScreen(
                 onOpenSession = onOpenSession,
                 onOpenSettings = onOpenSettings,
                 onRenameRequest = { renaming = it.id },
+                selectedSessionId = selectedPhaseSessionId,
+                onSelectedSessionChange = { selectedPhaseSessionId = it },
             )
         } else {
             PortraitHomeContent(
@@ -132,6 +142,8 @@ fun HomeScreen(
                 onOpenSession = onOpenSession,
                 onOpenSettings = onOpenSettings,
                 onRenameRequest = { renaming = it.id },
+                selectedSessionId = selectedPhaseSessionId,
+                onSelectedSessionChange = { selectedPhaseSessionId = it },
             )
         }
     }
@@ -159,6 +171,7 @@ fun HomeScreen(
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(s)
+                    if (selectedPhaseSessionId == s.id) selectedPhaseSessionId = null
                     deleting = null
                 }) { Text(stringResource(R.string.delete_yes)) }
             },
@@ -184,9 +197,15 @@ private fun PortraitHomeContent(
     onOpenSession: (SleepSession) -> Unit,
     onOpenSettings: () -> Unit,
     onRenameRequest: (SleepSession) -> Unit,
+    selectedSessionId: String?,
+    onSelectedSessionChange: (String) -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(
             start = 20.dp, end = 20.dp,
             top = 56.dp, bottom = 32.dp,
@@ -209,7 +228,16 @@ private fun PortraitHomeContent(
         item {
             PhaseHistoryGraph(
                 points = phaseHistory,
-                onPointSelected = onOpenSession,
+                onPointSelected = { session ->
+                    onSelectedSessionChange(session.id)
+                    scrollToSession(
+                        scope = scope,
+                        listState = listState,
+                        sessions = sessions,
+                        sessionId = session.id,
+                        firstSessionItemIndex = PortraitFirstSessionItemIndex,
+                    )
+                },
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -217,6 +245,7 @@ private fun PortraitHomeContent(
             repo = repo,
             sessions = sessions,
             activeSession = activeSession,
+            selectedSessionId = selectedSessionId,
             onOpenSession = onOpenSession,
             onRenameRequest = onRenameRequest,
         )
@@ -234,7 +263,12 @@ private fun LandscapeHomeContent(
     onOpenSession: (SleepSession) -> Unit,
     onOpenSettings: () -> Unit,
     onRenameRequest: (SleepSession) -> Unit,
+    selectedSessionId: String?,
+    onSelectedSessionChange: (String) -> Unit,
 ) {
+    val sessionListState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -271,13 +305,23 @@ private fun LandscapeHomeContent(
                 points = phaseHistory,
                 modifier = Modifier.weight(1f),
                 fillAvailableHeight = true,
-                onPointSelected = onOpenSession,
+                onPointSelected = { session ->
+                    onSelectedSessionChange(session.id)
+                    scrollToSession(
+                        scope = scope,
+                        listState = sessionListState,
+                        sessions = sessions,
+                        sessionId = session.id,
+                        firstSessionItemIndex = LandscapeFirstSessionItemIndex,
+                    )
+                },
             )
         }
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
+            state = sessionListState,
             contentPadding = PaddingValues(bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -285,6 +329,7 @@ private fun LandscapeHomeContent(
                 repo = repo,
                 sessions = sessions,
                 activeSession = activeSession,
+                selectedSessionId = selectedSessionId,
                 onOpenSession = onOpenSession,
                 onRenameRequest = onRenameRequest,
             )
@@ -292,10 +337,26 @@ private fun LandscapeHomeContent(
     }
 }
 
+private fun scrollToSession(
+    scope: kotlinx.coroutines.CoroutineScope,
+    listState: LazyListState,
+    sessions: List<SleepSession>,
+    sessionId: String,
+    firstSessionItemIndex: Int,
+) {
+    val sessionIndex = sessions.indexOfFirst { it.id == sessionId }
+    if (sessionIndex < 0) return
+
+    scope.launch {
+        listState.animateScrollToItem(firstSessionItemIndex + sessionIndex)
+    }
+}
+
 private fun LazyListScope.sessionListItems(
     repo: SessionRepository,
     sessions: List<SleepSession>,
     activeSession: SleepSession?,
+    selectedSessionId: String?,
     onOpenSession: (SleepSession) -> Unit,
     onRenameRequest: (SleepSession) -> Unit,
 ) {
@@ -324,6 +385,7 @@ private fun LazyListScope.sessionListItems(
                 qualityScore = stats?.qualityScore,
                 phaseDurations = stats?.phaseDurations,
                 isActive = activeSession?.id == session.id,
+                isSelected = selectedSessionId == session.id,
                 onClick = { onOpenSession(session) },
                 onLongClick = { onRenameRequest(session) },
             )
@@ -509,13 +571,6 @@ private fun PhaseHistoryGraph(
                 .then(if (fillAvailableHeight) Modifier.fillMaxSize() else Modifier)
                 .padding(16.dp)
         ) {
-            Text(
-                text = stringResource(R.string.phase_history),
-                color = OnNight,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(10.dp))
             val chartTapModifier = if (onPointSelected == null || points.isEmpty()) {
                 Modifier
             } else {

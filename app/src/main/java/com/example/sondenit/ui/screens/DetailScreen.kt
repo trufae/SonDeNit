@@ -1686,10 +1686,15 @@ private data class EventStatItem(
 private fun EventStatsGrid(stats: SessionStats) {
     val items = eventStatItems(stats)
     if (items.isEmpty()) return
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Spacer(Modifier.height(10.dp))
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = if (maxWidth < 360.dp) 3 else 4
+        val columns = if (expanded) {
+            if (maxWidth < 520.dp) 1 else 2
+        } else {
+            if (maxWidth < 360.dp) 3 else 4
+        }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items.chunked(columns).forEach { rowItems ->
                 Row(
@@ -1699,6 +1704,8 @@ private fun EventStatsGrid(stats: SessionStats) {
                     rowItems.forEach { item ->
                         EventStatCard(
                             item = item,
+                            expanded = expanded,
+                            onClick = { expanded = !expanded },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -1714,10 +1721,14 @@ private fun EventStatsGrid(stats: SessionStats) {
 @Composable
 private fun EventStatCard(
     item: EventStatItem,
+    expanded: Boolean,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.height(42.dp),
+        modifier = modifier
+            .height(if (expanded) 58.dp else 42.dp)
+            .clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(14.dp),
     ) {
@@ -1742,6 +1753,17 @@ private fun EventStatCard(
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
             )
+            if (expanded) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = item.contentDescription,
+                    color = OnNightMuted,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }
