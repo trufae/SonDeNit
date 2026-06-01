@@ -1,19 +1,23 @@
 package com.example.sondenit.ui.screens
 
+import android.content.res.Configuration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,8 +29,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,9 +51,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.sondenit.R
 import com.example.sondenit.data.SessionRepository
@@ -68,6 +74,7 @@ import com.example.sondenit.ui.theme.OnNight
 import com.example.sondenit.ui.theme.OnNightMuted
 import com.example.sondenit.ui.theme.PinkDawn
 import com.example.sondenit.ui.theme.SkyTeal
+import kotlin.math.roundToInt
 
 @Composable
 fun HomeScreen(
@@ -88,9 +95,10 @@ fun HomeScreen(
             .filter { it.endedAt != null }
             .sortedBy { it.startedAt }
             .mapNotNull { session ->
-                repo.readStats(session.id)?.toPhaseHistoryPoint()
+                repo.readStats(session.id)?.toPhaseHistoryPoint(session)
             }
     }
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(
         modifier = Modifier
@@ -101,66 +109,30 @@ fun HomeScreen(
                 )
             )
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 20.dp, end = 20.dp,
-                top = 56.dp, bottom = 32.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item {
-                Header(onOpenSettings)
-            }
-            item {
-                Spacer(Modifier.height(20.dp))
-                BreathingActionButton(onClick = onOpenBreathing)
-                Spacer(Modifier.height(12.dp))
-                PrimaryActionCard(
-                    isResume = activeSession != null,
-                    onClick = onPrimaryAction,
-                )
-                Spacer(Modifier.height(16.dp))
-            }
-            item {
-                PhaseHistoryGraph(phaseHistory)
-                Spacer(Modifier.height(12.dp))
-            }
-            if (sessions.isEmpty()) {
-                item {
-                    EmptyState()
-                }
-            } else {
-                item {
-                    Text(
-                        text = stringResource(R.string.past_sessions),
-                        color = OnNightMuted,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp),
-                    )
-                }
-                items(sessions, key = { it.id }) { session ->
-                    val durationMs = session.endedAt?.let { it - session.startedAt }
-                    val stats = remember(session.id, session.endedAt) {
-                        if (session.endedAt == null) null else repo.readStats(session.id)
-                    }
-                    SessionRow(
-                        session = session,
-                        durationMs = durationMs,
-                        qualityScore = stats?.qualityScore,
-                        phaseDurations = stats?.phaseDurations,
-                        isActive = activeSession?.id == session.id,
-                        onClick = { onOpenSession(session) },
-                        onLongClick = {
-                            // Long-press shows a tiny inline menu via dialogs.
-                            // We just trigger the rename dialog by default and show
-                            // a delete confirmation when the user picks delete.
-                            renaming = session.id
-                        },
-                    )
-                }
-            }
+        if (isLandscape) {
+            LandscapeHomeContent(
+                repo = repo,
+                sessions = sessions,
+                activeSession = activeSession,
+                phaseHistory = phaseHistory,
+                onPrimaryAction = onPrimaryAction,
+                onOpenBreathing = onOpenBreathing,
+                onOpenSession = onOpenSession,
+                onOpenSettings = onOpenSettings,
+                onRenameRequest = { renaming = it.id },
+            )
+        } else {
+            PortraitHomeContent(
+                repo = repo,
+                sessions = sessions,
+                activeSession = activeSession,
+                phaseHistory = phaseHistory,
+                onPrimaryAction = onPrimaryAction,
+                onOpenBreathing = onOpenBreathing,
+                onOpenSession = onOpenSession,
+                onOpenSettings = onOpenSettings,
+                onRenameRequest = { renaming = it.id },
+            )
         }
     }
 
@@ -198,6 +170,164 @@ fun HomeScreen(
             title = { Text(stringResource(R.string.delete_dialog_title)) },
             text = { Text(stringResource(R.string.delete_dialog_message)) },
         )
+    }
+}
+
+@Composable
+private fun PortraitHomeContent(
+    repo: SessionRepository,
+    sessions: List<SleepSession>,
+    activeSession: SleepSession?,
+    phaseHistory: List<PhaseHistoryPoint>,
+    onPrimaryAction: () -> Unit,
+    onOpenBreathing: () -> Unit,
+    onOpenSession: (SleepSession) -> Unit,
+    onOpenSettings: () -> Unit,
+    onRenameRequest: (SleepSession) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 20.dp, end = 20.dp,
+            top = 56.dp, bottom = 32.dp,
+        ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            Header(onOpenSettings)
+        }
+        item {
+            Spacer(Modifier.height(20.dp))
+            BreathingActionButton(onClick = onOpenBreathing)
+            Spacer(Modifier.height(12.dp))
+            PrimaryActionCard(
+                isResume = activeSession != null,
+                onClick = onPrimaryAction,
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+        item {
+            PhaseHistoryGraph(
+                points = phaseHistory,
+                onPointSelected = onOpenSession,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+        sessionListItems(
+            repo = repo,
+            sessions = sessions,
+            activeSession = activeSession,
+            onOpenSession = onOpenSession,
+            onRenameRequest = onRenameRequest,
+        )
+    }
+}
+
+@Composable
+private fun LandscapeHomeContent(
+    repo: SessionRepository,
+    sessions: List<SleepSession>,
+    activeSession: SleepSession?,
+    phaseHistory: List<PhaseHistoryPoint>,
+    onPrimaryAction: () -> Unit,
+    onOpenBreathing: () -> Unit,
+    onOpenSession: (SleepSession) -> Unit,
+    onOpenSettings: () -> Unit,
+    onRenameRequest: (SleepSession) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(start = 20.dp, top = 36.dp, end = 20.dp, bottom = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+        ) {
+            Header(onOpenSettings)
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                BreathingActionButton(
+                    onClick = onOpenBreathing,
+                    modifier = Modifier.weight(1f),
+                    height = 70.dp,
+                    compact = true,
+                )
+                PrimaryActionCard(
+                    isResume = activeSession != null,
+                    onClick = onPrimaryAction,
+                    modifier = Modifier.weight(1f),
+                    height = 70.dp,
+                    compact = true,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            PhaseHistoryGraph(
+                points = phaseHistory,
+                modifier = Modifier.weight(1f),
+                fillAvailableHeight = true,
+                onPointSelected = onOpenSession,
+            )
+        }
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            contentPadding = PaddingValues(bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            sessionListItems(
+                repo = repo,
+                sessions = sessions,
+                activeSession = activeSession,
+                onOpenSession = onOpenSession,
+                onRenameRequest = onRenameRequest,
+            )
+        }
+    }
+}
+
+private fun LazyListScope.sessionListItems(
+    repo: SessionRepository,
+    sessions: List<SleepSession>,
+    activeSession: SleepSession?,
+    onOpenSession: (SleepSession) -> Unit,
+    onRenameRequest: (SleepSession) -> Unit,
+) {
+    if (sessions.isEmpty()) {
+        item {
+            EmptyState()
+        }
+    } else {
+        item {
+            Text(
+                text = stringResource(R.string.past_sessions),
+                color = OnNightMuted,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 4.dp),
+            )
+        }
+        items(sessions, key = { it.id }) { session ->
+            val durationMs = session.endedAt?.let { it - session.startedAt }
+            val stats = remember(session.id, session.endedAt) {
+                if (session.endedAt == null) null else repo.readStats(session.id)
+            }
+            SessionRow(
+                session = session,
+                durationMs = durationMs,
+                qualityScore = stats?.qualityScore,
+                phaseDurations = stats?.phaseDurations,
+                isActive = activeSession?.id == session.id,
+                onClick = { onOpenSession(session) },
+                onLongClick = { onRenameRequest(session) },
+            )
+        }
     }
 }
 
@@ -245,13 +375,16 @@ private fun Header(onOpenSettings: () -> Unit) {
 }
 
 @Composable
-private fun BreathingActionButton(onClick: () -> Unit) {
+private fun BreathingActionButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    height: Dp = 72.dp,
+    compact: Boolean = false,
+) {
     Button(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(72.dp),
-        shape = RoundedCornerShape(24.dp),
+        modifier = modifier.height(height),
+        shape = RoundedCornerShape(if (compact) 22.dp else 24.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = SkyTeal,
             contentColor = NightDeep,
@@ -265,26 +398,33 @@ private fun BreathingActionButton(onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.Air,
                 contentDescription = null,
-                modifier = Modifier.size(30.dp),
+                modifier = Modifier.size(if (compact) 26.dp else 30.dp),
             )
-            Spacer(Modifier.size(12.dp))
+            Spacer(Modifier.size(if (compact) 8.dp else 12.dp))
             Text(
                 text = stringResource(R.string.breathing_button),
-                style = MaterialTheme.typography.titleMedium,
+                style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
             )
         }
     }
 }
 
 @Composable
-private fun PrimaryActionCard(isResume: Boolean, onClick: () -> Unit) {
+private fun PrimaryActionCard(
+    isResume: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    height: Dp = 96.dp,
+    compact: Boolean = false,
+) {
     Button(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(96.dp),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+        modifier = modifier.height(height),
+        shape = RoundedCornerShape(if (compact) 22.dp else 28.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = MoonGlow,
             contentColor = NightDeep,
@@ -298,21 +438,25 @@ private fun PrimaryActionCard(isResume: Boolean, onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Filled.Bedtime,
                 contentDescription = null,
-                modifier = Modifier.size(36.dp),
+                modifier = Modifier.size(if (compact) 26.dp else 36.dp),
             )
-            Spacer(Modifier.size(14.dp))
+            Spacer(Modifier.size(if (compact) 8.dp else 14.dp))
             Text(
                 text = stringResource(
                     if (isResume) R.string.continue_sleep else R.string.start_sleep
                 ),
-                style = MaterialTheme.typography.titleLarge,
+                style = if (compact) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
             )
         }
     }
 }
 
 private data class PhaseHistoryPoint(
+    val session: SleepSession,
     val deepShare: Float,
     val remShare: Float,
     val lightShare: Float,
@@ -325,7 +469,7 @@ private data class PhaseHistoryLine(
     val value: (PhaseHistoryPoint) -> Float,
 )
 
-private fun SessionStats.toPhaseHistoryPoint(): PhaseHistoryPoint? {
+private fun SessionStats.toPhaseHistoryPoint(session: SleepSession): PhaseHistoryPoint? {
     val totalPhaseMs = phaseDurations.values.sum()
     if (totalPhaseMs <= 0L) return null
 
@@ -333,6 +477,7 @@ private fun SessionStats.toPhaseHistoryPoint(): PhaseHistoryPoint? {
         ((phaseDurations[phase] ?: 0L).toFloat() / totalPhaseMs.toFloat()).coerceIn(0f, 1f)
 
     return PhaseHistoryPoint(
+        session = session,
         deepShare = shareOf(SleepPhase.DEEP),
         remShare = shareOf(SleepPhase.REM),
         lightShare = shareOf(SleepPhase.LIGHT),
@@ -341,7 +486,12 @@ private fun SessionStats.toPhaseHistoryPoint(): PhaseHistoryPoint? {
 }
 
 @Composable
-private fun PhaseHistoryGraph(points: List<PhaseHistoryPoint>) {
+private fun PhaseHistoryGraph(
+    points: List<PhaseHistoryPoint>,
+    modifier: Modifier = Modifier,
+    fillAvailableHeight: Boolean = false,
+    onPointSelected: ((SleepSession) -> Unit)? = null,
+) {
     val lines = listOf(
         PhaseHistoryLine(stringResource(R.string.phase_deep), Lavender) { it.deepShare },
         PhaseHistoryLine(stringResource(R.string.phase_rem), MoonGlow) { it.remShare },
@@ -350,11 +500,15 @@ private fun PhaseHistoryGraph(points: List<PhaseHistoryPoint>) {
     )
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         color = NightSurface,
         shape = RoundedCornerShape(20.dp),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(
+            Modifier
+                .then(if (fillAvailableHeight) Modifier.fillMaxSize() else Modifier)
+                .padding(16.dp)
+        ) {
             Text(
                 text = stringResource(R.string.phase_history),
                 color = OnNight,
@@ -362,10 +516,30 @@ private fun PhaseHistoryGraph(points: List<PhaseHistoryPoint>) {
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(10.dp))
+            val chartTapModifier = if (onPointSelected == null || points.isEmpty()) {
+                Modifier
+            } else {
+                Modifier.pointerInput(points, onPointSelected) {
+                    detectTapGestures { offset ->
+                        val left = 8.dp.toPx()
+                        val right = size.width.toFloat() - 8.dp.toPx()
+                        val chartWidth = (right - left).coerceAtLeast(1f)
+                        val normalizedX = (offset.x - left).coerceIn(0f, chartWidth) / chartWidth
+                        val selectedIndex = if (points.size == 1) {
+                            0
+                        } else {
+                            (normalizedX * (points.size - 1)).roundToInt()
+                                .coerceIn(0, points.lastIndex)
+                        }
+                        onPointSelected(points[selectedIndex].session)
+                    }
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp),
+                    .then(if (fillAvailableHeight) Modifier.weight(1f) else Modifier.height(120.dp))
+                    .then(chartTapModifier),
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val left = 8.dp.toPx()
@@ -425,7 +599,7 @@ private fun PhaseHistoryGraph(points: List<PhaseHistoryPoint>) {
                         text = stringResource(R.string.phase_history_empty),
                         color = OnNightMuted,
                         style = MaterialTheme.typography.bodySmall,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        textAlign = TextAlign.Center,
                         modifier = Modifier
                             .align(Alignment.Center)
                             .padding(horizontal = 12.dp),
