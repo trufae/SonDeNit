@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -24,7 +27,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
@@ -39,8 +42,8 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -66,6 +69,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.sondenit.R
@@ -99,7 +103,6 @@ import com.example.sondenit.ui.theme.SkyTeal
 import com.example.sondenit.util.formatDateLong
 import com.example.sondenit.util.formatDurationShort
 import com.example.sondenit.util.formatTimeOfDay
-import com.example.sondenit.util.formatTimeOfDayLong
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -141,6 +144,7 @@ fun DetailScreen(
     val player = remember { AudioPlayer() }
     var playback by remember { mutableStateOf<PlaybackState?>(null) }
     var mapTimestamp by rememberSaveable(session.id) { mutableStateOf(session.startedAt) }
+    var selectedTimestamp by rememberSaveable(session.id) { mutableStateOf<Long?>(null) }
     var events by remember(session.id, session.endedAt) { mutableStateOf(repo.readEvents(session.id)) }
     val sessionDir = remember(session.id) { repo.sessionDir(session.id) }
 
@@ -148,6 +152,7 @@ fun DetailScreen(
     var editingNotes by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var editingAudioChunks by remember { mutableStateOf<List<SessionEvent.AudioChunk>?>(null) }
+    var editingMotionEvent by remember { mutableStateOf<SessionEvent.Motion?>(null) }
     var changingAudioType by remember { mutableStateOf<List<SessionEvent.AudioChunk>?>(null) }
     var newName by rememberSaveable(session.id) { mutableStateOf(session.displayName) }
     var notesDraft by rememberSaveable(session.id) { mutableStateOf(session.notes) }
@@ -194,7 +199,7 @@ fun DetailScreen(
 
     val sessionStart = session.startedAt
     val sessionEnd = session.endedAt ?: events.lastOrNull()?.timestamp ?: session.startedAt
-    val playheadTimestamp = playback?.timestamp ?: mapTimestamp
+    val playheadTimestamp = playback?.timestamp ?: selectedTimestamp ?: mapTimestamp
 
     val onPlayGroup: (NoiseGroup) -> Unit = { group ->
         playAudioChunks(
@@ -232,13 +237,23 @@ fun DetailScreen(
     ) {
         val isLandscape = maxWidth > maxHeight
         val isWide = maxWidth >= WIDE_BREAKPOINT
+        val topPadding = maxOf(
+            32.dp,
+            WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding(),
+        )
 
-        Column(Modifier.fillMaxSize().padding(top = 32.dp)) {
+        Column(Modifier.fillMaxSize().padding(top = topPadding)) {
             TopBar(
                 title = session.displayName,
                 subtitle = formatDateLong(session.startedAt),
+                canPlayAllAudio = audioChunks.isNotEmpty(),
                 onBack = onBack,
+                onPlayAllAudio = onPlayAllAudio,
                 onRename = { renaming = true },
+                onEditNotes = {
+                    notesDraft = session.notes
+                    editingNotes = true
+                },
                 onDelete = { deleting = true },
             )
 
@@ -255,12 +270,14 @@ fun DetailScreen(
                     motionEvents = motionEvents,
                     labels = labels,
                     playback = playback,
+                    selectedTimestamp = selectedTimestamp,
                     playheadTimestamp = playheadTimestamp,
-                    audioChunks = audioChunks,
                     onPlayGroup = onPlayGroup,
-                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
-                    onMapSeek = { mapTimestamp = it },
+                    onMapSeek = {
+                        mapTimestamp = it
+                        selectedTimestamp = it
+                    },
                     groupSeconds = groupSeconds,
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
@@ -270,6 +287,7 @@ fun DetailScreen(
                         editingNotes = true
                     },
                     onEditAudioRow = { editingAudioChunks = it },
+                    onEditMotionEvent = { editingMotionEvent = it },
                 )
                 isWide -> WidePortraitLayout(
                     session = session,
@@ -283,12 +301,14 @@ fun DetailScreen(
                     motionEvents = motionEvents,
                     labels = labels,
                     playback = playback,
+                    selectedTimestamp = selectedTimestamp,
                     playheadTimestamp = playheadTimestamp,
-                    audioChunks = audioChunks,
                     onPlayGroup = onPlayGroup,
-                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
-                    onMapSeek = { mapTimestamp = it },
+                    onMapSeek = {
+                        mapTimestamp = it
+                        selectedTimestamp = it
+                    },
                     groupSeconds = groupSeconds,
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
@@ -298,6 +318,7 @@ fun DetailScreen(
                         editingNotes = true
                     },
                     onEditAudioRow = { editingAudioChunks = it },
+                    onEditMotionEvent = { editingMotionEvent = it },
                 )
                 else -> CompactLayout(
                     session = session,
@@ -311,12 +332,14 @@ fun DetailScreen(
                     motionEvents = motionEvents,
                     labels = labels,
                     playback = playback,
+                    selectedTimestamp = selectedTimestamp,
                     playheadTimestamp = playheadTimestamp,
-                    audioChunks = audioChunks,
                     onPlayGroup = onPlayGroup,
-                    onPlayAllAudio = onPlayAllAudio,
                     onStopPlayback = onStopPlayback,
-                    onMapSeek = { mapTimestamp = it },
+                    onMapSeek = {
+                        mapTimestamp = it
+                        selectedTimestamp = it
+                    },
                     groupSeconds = groupSeconds,
                     onGroupChange = { groupSeconds = it },
                     minIntSeconds = minIntSeconds,
@@ -326,6 +349,7 @@ fun DetailScreen(
                         editingNotes = true
                     },
                     onEditAudioRow = { editingAudioChunks = it },
+                    onEditMotionEvent = { editingMotionEvent = it },
                 )
             }
         }
@@ -431,6 +455,24 @@ fun DetailScreen(
             },
         )
     }
+    editingMotionEvent?.let { event ->
+        MotionEventActionsDialog(
+            onDismiss = { editingMotionEvent = null },
+            onFavorite = {
+                repo.markMotionEventsFavorite(session.id, listOf(event))
+                events = repo.readEvents(session.id)
+                editingMotionEvent = null
+            },
+            onDelete = {
+                if (selectedTimestamp == event.timestamp) {
+                    selectedTimestamp = null
+                }
+                repo.deleteMotionEvents(session.id, listOf(event))
+                events = repo.readEvents(session.id)
+                editingMotionEvent = null
+            },
+        )
+    }
     changingAudioType?.let { chunks ->
         AudioTypeDialog(
             chunks = chunks,
@@ -459,10 +501,9 @@ private fun CompactLayout(
     motionEvents: List<SessionEvent.Motion>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
+    selectedTimestamp: Long?,
     playheadTimestamp: Long?,
-    audioChunks: List<SessionEvent.AudioChunk>,
     onPlayGroup: (NoiseGroup) -> Unit,
-    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
     onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
@@ -471,9 +512,9 @@ private fun CompactLayout(
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
     onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
+    onEditMotionEvent: (SessionEvent.Motion) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     val timelineHeaderIndex = compactTimelineHeaderIndex(stats.sleptDurationMs > 0)
     LaunchedEffect(playback?.timestamp, timelineRows) {
         playback?.timestamp?.let { ts ->
@@ -488,8 +529,8 @@ private fun CompactLayout(
         state = listState,
         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
     ) {
-        item { SummaryCard(session, stats, onEditNotes) }
-        item { NotesSection(session.notes) }
+        item { SummaryCard(session, stats) }
+        item { NotesSection(session.notes, onEditNotes) }
         if (stats.sleptDurationMs > 0) {
             item {
                 Spacer(Modifier.height(16.dp))
@@ -499,6 +540,7 @@ private fun CompactLayout(
                     chartMaxSize = 180.dp,
                 )
             }
+            item { Spacer(Modifier.height(16.dp)); SignalsCard(stats) }
             item {
                 Spacer(Modifier.height(16.dp))
                 EventRibbon(
@@ -511,7 +553,6 @@ private fun CompactLayout(
                     playheadTimestamp = playheadTimestamp,
                     onSeekTimestamp = { ts ->
                         onMapSeek(ts)
-                        scrollTimelineTo(scope, listState, timelineHeaderIndex, timelineRows, ts)
                     },
                     title = stringResource(R.string.event_ribbon),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
@@ -522,17 +563,16 @@ private fun CompactLayout(
                 AnalysisSliders(groupSeconds, onGroupChange, minIntSeconds, onMinIntChange)
             }
             item { Spacer(Modifier.height(16.dp)); StatsGrid(stats) }
-            item { Spacer(Modifier.height(16.dp)); SignalsCard(stats) }
         }
         timelineSection(
             timelineRows = timelineRows,
             labels = labels,
             playback = playback,
-            audioChunks = audioChunks,
+            selectedTimestamp = selectedTimestamp,
             onPlayGroup = onPlayGroup,
-            onPlayAllAudio = onPlayAllAudio,
             onStopPlayback = onStopPlayback,
             onEditAudioRow = onEditAudioRow,
+            onEditMotionEvent = onEditMotionEvent,
         )
     }
 }
@@ -550,10 +590,9 @@ private fun WidePortraitLayout(
     motionEvents: List<SessionEvent.Motion>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
+    selectedTimestamp: Long?,
     playheadTimestamp: Long?,
-    audioChunks: List<SessionEvent.AudioChunk>,
     onPlayGroup: (NoiseGroup) -> Unit,
-    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
     onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
@@ -562,9 +601,9 @@ private fun WidePortraitLayout(
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
     onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
+    onEditMotionEvent: (SessionEvent.Motion) -> Unit,
 ) {
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
     val timelineHeaderIndex = widePortraitTimelineHeaderIndex(stats.sleptDurationMs > 0)
     LaunchedEffect(playback?.timestamp, timelineRows) {
         playback?.timestamp?.let { ts ->
@@ -579,8 +618,8 @@ private fun WidePortraitLayout(
         state = listState,
         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
     ) {
-        item { SummaryCard(session, stats, onEditNotes) }
-        item { NotesSection(session.notes) }
+        item { SummaryCard(session, stats) }
+        item { NotesSection(session.notes, onEditNotes) }
         if (stats.sleptDurationMs > 0) {
             item {
                 Spacer(Modifier.height(16.dp))
@@ -592,19 +631,22 @@ private fun WidePortraitLayout(
                     verticalAlignment = Alignment.Top,
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
-                        PhasesSection(
-                            stats = stats,
-                            legendBelow = false,
-                            outerPadding = 0.dp,
-                            chartMaxSize = 180.dp,
-                        )
+                        Column {
+                            PhasesSection(
+                                stats = stats,
+                                legendBelow = false,
+                                outerPadding = 0.dp,
+                                chartMaxSize = 180.dp,
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            SignalsCard(stats, outerPadding = 0.dp)
+                        }
                     }
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         StatsGrid(stats, outerPadding = 0.dp)
-                        SignalsCard(stats, outerPadding = 0.dp)
                     }
                 }
             }
@@ -620,7 +662,6 @@ private fun WidePortraitLayout(
                     playheadTimestamp = playheadTimestamp,
                     onSeekTimestamp = { ts ->
                         onMapSeek(ts)
-                        scrollTimelineTo(scope, listState, timelineHeaderIndex, timelineRows, ts)
                     },
                     title = stringResource(R.string.event_ribbon),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
@@ -635,11 +676,11 @@ private fun WidePortraitLayout(
             timelineRows = timelineRows,
             labels = labels,
             playback = playback,
-            audioChunks = audioChunks,
+            selectedTimestamp = selectedTimestamp,
             onPlayGroup = onPlayGroup,
-            onPlayAllAudio = onPlayAllAudio,
             onStopPlayback = onStopPlayback,
             onEditAudioRow = onEditAudioRow,
+            onEditMotionEvent = onEditMotionEvent,
         )
     }
 }
@@ -657,10 +698,9 @@ private fun SplitLayout(
     motionEvents: List<SessionEvent.Motion>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
+    selectedTimestamp: Long?,
     playheadTimestamp: Long?,
-    audioChunks: List<SessionEvent.AudioChunk>,
     onPlayGroup: (NoiseGroup) -> Unit,
-    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
     onMapSeek: (Long) -> Unit,
     groupSeconds: Float,
@@ -669,6 +709,7 @@ private fun SplitLayout(
     onMinIntChange: (Float) -> Unit,
     onEditNotes: () -> Unit,
     onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
+    onEditMotionEvent: (SessionEvent.Motion) -> Unit,
 ) {
     val timelineState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -688,8 +729,8 @@ private fun SplitLayout(
                 .fillMaxHeight(),
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
         ) {
-            item { SummaryCard(session, stats, onEditNotes) }
-            item { NotesSection(session.notes) }
+            item { SummaryCard(session, stats) }
+            item { NotesSection(session.notes, onEditNotes) }
             if (stats.sleptDurationMs > 0) {
                 item {
                     Spacer(Modifier.height(16.dp))
@@ -699,6 +740,7 @@ private fun SplitLayout(
                         chartMaxSize = 220.dp,
                     )
                 }
+                item { Spacer(Modifier.height(16.dp)); SignalsCard(stats) }
                 item {
                     Spacer(Modifier.height(16.dp))
                     EventRibbon(
@@ -722,7 +764,6 @@ private fun SplitLayout(
                     AnalysisSliders(groupSeconds, onGroupChange, minIntSeconds, onMinIntChange)
                 }
                 item { Spacer(Modifier.height(16.dp)); StatsGrid(stats) }
-                item { Spacer(Modifier.height(16.dp)); SignalsCard(stats) }
             }
         }
         // Divider
@@ -744,11 +785,11 @@ private fun SplitLayout(
                 timelineRows = timelineRows,
                 labels = labels,
                 playback = playback,
-                audioChunks = audioChunks,
+                selectedTimestamp = selectedTimestamp,
                 onPlayGroup = onPlayGroup,
-                onPlayAllAudio = onPlayAllAudio,
                 onStopPlayback = onStopPlayback,
                 onEditAudioRow = onEditAudioRow,
+                onEditMotionEvent = onEditMotionEvent,
             )
         }
     }
@@ -760,11 +801,11 @@ private fun LazyListScope.timelineSection(
     timelineRows: List<TimelineRowData>,
     labels: com.example.sondenit.ui.components.TimelineLabels,
     playback: PlaybackState?,
-    audioChunks: List<SessionEvent.AudioChunk>,
+    selectedTimestamp: Long?,
     onPlayGroup: (NoiseGroup) -> Unit,
-    onPlayAllAudio: () -> Unit,
     onStopPlayback: () -> Unit,
     onEditAudioRow: (List<SessionEvent.AudioChunk>) -> Unit,
+    onEditMotionEvent: (SessionEvent.Motion) -> Unit,
 ) {
     item {
         Spacer(Modifier.height(20.dp))
@@ -777,15 +818,10 @@ private fun LazyListScope.timelineSection(
         )
         Spacer(Modifier.height(4.dp))
     }
-    item {
-        TimelinePlaybackControl(
-            audioCount = audioChunks.size,
-            currentTimestamp = playback?.timestamp,
-            isPlaying = playback != null,
-            onPlayAll = onPlayAllAudio,
-            onStop = onStopPlayback,
-        )
-        Spacer(Modifier.height(8.dp))
+    val selectedIndex = selectedTimestamp?.let { timestamp ->
+        timelineRows.withIndex().minByOrNull { (_, row) ->
+            abs(row.timestamp - timestamp)
+        }?.index
     }
     items(timelineRows.size) { idx ->
         val row = timelineRows[idx]
@@ -794,11 +830,18 @@ private fun LazyListScope.timelineSection(
         if (gap > 0) TimelineGap(gap)
         Box(modifier = Modifier.padding(horizontal = TIMELINE_PAD)) {
             when (row) {
-                is TimelineRowData.Event -> TimelineRow(
-                    spec = describe(row.event, labels),
-                    showLineAbove = idx > 0,
-                    showLineBelow = idx < timelineRows.size - 1,
-                )
+                is TimelineRowData.Event -> {
+                    val motionEvent = row.event as? SessionEvent.Motion
+                    TimelineRow(
+                        spec = describe(row.event, labels),
+                        showLineAbove = idx > 0,
+                        showLineBelow = idx < timelineRows.size - 1,
+                        selected = idx == selectedIndex,
+                        onLongClick = motionEvent?.let { event ->
+                            { onEditMotionEvent(event) }
+                        },
+                    )
+                }
                 is TimelineRowData.Group -> {
                     val isPlaying = playback?.file?.let { file ->
                         row.group.chunks.any { it.file == file }
@@ -808,6 +851,7 @@ private fun LazyListScope.timelineSection(
                             .copy(playing = isPlaying),
                         showLineAbove = idx > 0,
                         showLineBelow = idx < timelineRows.size - 1,
+                        selected = idx == selectedIndex,
                         onPlay = { onPlayGroup(row.group) },
                         onStop = onStopPlayback,
                         onLongClick = { onEditAudioRow(row.group.chunks) },
@@ -860,6 +904,40 @@ private fun AudioChunkActionsDialog(
                     text = stringResource(R.string.change_sound_type),
                     tint = SkyTeal,
                     onClick = onChangeType,
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun MotionEventActionsDialog(
+    onDismiss: () -> Unit,
+    onFavorite: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+        title = { Text(stringResource(R.string.motion_actions_title)) },
+        text = {
+            Column {
+                DialogActionButton(
+                    icon = Icons.Filled.Star,
+                    text = stringResource(R.string.mark_as_favorite),
+                    tint = MoonGlow,
+                    onClick = onFavorite,
+                )
+                DialogActionButton(
+                    icon = Icons.Filled.Delete,
+                    text = stringResource(R.string.delete_motion_event),
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = onDelete,
                 )
             }
         },
@@ -951,72 +1029,6 @@ private fun soundClassColor(klass: SoundClass): Color = when (klass) {
     SoundClass.UNKNOWN -> OnNightMuted
 }
 
-@Composable
-private fun TimelinePlaybackControl(
-    audioCount: Int,
-    currentTimestamp: Long?,
-    isPlaying: Boolean,
-    onPlayAll: () -> Unit,
-    onStop: () -> Unit,
-) {
-    val enabled = audioCount > 0
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = TIMELINE_PAD, vertical = 4.dp),
-        color = NightSurface,
-        shape = RoundedCornerShape(18.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val accent = if (enabled) MoonGlow else OnNightMuted
-            Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .background(accent.copy(alpha = if (enabled) 0.95f else 0.25f), RoundedCornerShape(50))
-                    .clickable(enabled = enabled) {
-                        if (isPlaying) onStop() else onPlayAll()
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Filled.Stop else Icons.Filled.PlayArrow,
-                    contentDescription = if (isPlaying)
-                        stringResource(R.string.stop_chunk)
-                    else stringResource(R.string.play_all_audio),
-                    tint = NightDeep,
-                    modifier = Modifier.size(34.dp),
-                )
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.play_all_audio),
-                    color = OnNight,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = when {
-                        currentTimestamp != null -> stringResource(
-                            R.string.now_playing_audio_time,
-                            formatTimeOfDayLong(currentTimestamp),
-                        )
-                        enabled -> stringResource(R.string.audio_recording_count, audioCount)
-                        else -> stringResource(R.string.no_audio_recorded)
-                    },
-                    color = if (currentTimestamp != null) MoonGlow else OnNightMuted,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-    }
-}
-
 // ── data + helpers ─────────────────────────────────────────────────────────
 
 sealed interface TimelineRowData {
@@ -1104,7 +1116,7 @@ private fun timelineListIndexForTimestamp(
     val nearest = timelineRows.withIndex().minByOrNull { (_, row) ->
         abs(row.timestamp - timestamp)
     }?.index ?: return null
-    return timelineHeaderIndex + 2 + nearest
+    return timelineHeaderIndex + 1 + nearest
 }
 
 private fun computePausedRanges(events: List<SessionEvent>): List<LongRange> {
@@ -1277,10 +1289,15 @@ private fun DisposableEffectOnDispose(block: () -> Unit) {
 private fun TopBar(
     title: String,
     subtitle: String,
+    canPlayAllAudio: Boolean,
     onBack: () -> Unit,
+    onPlayAllAudio: () -> Unit,
     onRename: () -> Unit,
+    onEditNotes: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1305,26 +1322,64 @@ private fun TopBar(
                 color = OnNight,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = subtitle,
                 color = OnNightMuted,
                 style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(onClick = onRename) {
-            Icon(
-                imageVector = Icons.Filled.Edit,
-                contentDescription = stringResource(R.string.rename),
-                tint = OnNight,
-            )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Filled.Delete,
-                contentDescription = stringResource(R.string.delete),
-                tint = MaterialTheme.colorScheme.error,
-            )
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(
+                    imageVector = Icons.Filled.Menu,
+                    contentDescription = stringResource(R.string.session_menu),
+                    tint = OnNight,
+                )
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.menu_play_all_audio)) },
+                    enabled = canPlayAllAudio,
+                    onClick = {
+                        menuExpanded = false
+                        onPlayAllAudio()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.menu_edit_title)) },
+                    onClick = {
+                        menuExpanded = false
+                        onRename()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.menu_annotations)) },
+                    onClick = {
+                        menuExpanded = false
+                        onEditNotes()
+                    },
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = stringResource(R.string.menu_delete),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    },
+                )
+            }
         }
     }
 }
@@ -1333,7 +1388,6 @@ private fun TopBar(
 private fun SummaryCard(
     session: SleepSession,
     stats: SessionStats,
-    onEditNotes: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
@@ -1343,49 +1397,19 @@ private fun SummaryCard(
         color = NightSurface,
     ) {
         Column(Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f).padding(end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Bedtime,
-                        contentDescription = null,
-                        tint = MoonGlow,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.session_summary),
-                        color = OnNight,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                Button(
-                    onClick = onEditNotes,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MoonGlow,
-                        contentColor = NightDeep,
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Notes,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.comments),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Bedtime,
+                    contentDescription = null,
+                    tint = MoonGlow,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.session_summary),
+                    color = OnNight,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
             Spacer(Modifier.height(14.dp))
             Text(
@@ -1417,7 +1441,7 @@ private fun SummaryCard(
 }
 
 @Composable
-private fun NotesSection(notes: String) {
+private fun NotesSection(notes: String, onEditNotes: () -> Unit) {
     val trimmed = notes.trim()
     if (trimmed.isEmpty()) {
         return
@@ -1430,7 +1454,9 @@ private fun NotesSection(notes: String) {
     ) {
         Spacer(Modifier.height(10.dp))
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onEditNotes),
             shape = RoundedCornerShape(18.dp),
             color = NightSurface.copy(alpha = 0.72f),
         ) {

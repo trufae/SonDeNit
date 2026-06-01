@@ -45,6 +45,7 @@ sealed class SessionEvent {
         val avgAcceleration: Float,
         val orientationChangeDeg: Float,
         val wakeEvent: Boolean,
+        val favorite: Boolean = false,
     ) : SessionEvent() {
         override fun toJson(): JSONObject = baseJson("motion").apply {
             put("durationMs", durationMs)
@@ -52,6 +53,7 @@ sealed class SessionEvent {
             put("avgAcceleration", avgAcceleration.toDouble())
             put("orientationChangeDeg", orientationChangeDeg.toDouble())
             put("wakeEvent", wakeEvent)
+            put("favorite", favorite)
         }
     }
     data class AudioChunk(
@@ -94,6 +96,7 @@ sealed class SessionEvent {
                     avgAcceleration = json.optDouble("avgAcceleration", 0.0).toFloat(),
                     orientationChangeDeg = json.optDouble("orientationChangeDeg", 0.0).toFloat(),
                     wakeEvent = json.optBoolean("wakeEvent", false),
+                    favorite = json.optBoolean("favorite", false),
                 )
                 "audio_chunk" -> AudioChunk(
                     timestamp = ts,

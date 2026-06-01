@@ -8,7 +8,7 @@ object AudioSettings {
     private const val KEY_EQUALIZATION = "equalization_amount"
     private const val KEY_RECORDING_START_DELAY_SECONDS = "recording_start_delay_seconds"
 
-    const val DEFAULT_EQUALIZATION = 0f
+    const val DEFAULT_EQUALIZATION = 0.5f
     const val DEFAULT_RECORDING_START_DELAY_SECONDS = 5
     val RECORDING_START_DELAY_OPTIONS_SECONDS = listOf(0, 3, 5, 10, 15, 20, 30)
 

@@ -103,6 +103,7 @@ fun describe(event: SessionEvent, contextLabels: TimelineLabels): TimelineRowSpe
             ),
         icon = Icons.Filled.Vibration,
         accent = if (event.wakeEvent) PinkDawn else SkyTeal,
+        favorite = event.favorite,
     )
     is SessionEvent.AudioChunk -> {
         val (label, color) = describeSound(event.classification)
@@ -171,6 +172,7 @@ fun TimelineRow(
     spec: TimelineRowSpec,
     showLineAbove: Boolean,
     showLineBelow: Boolean,
+    selected: Boolean = false,
     onPlay: (() -> Unit)? = null,
     onStop: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
@@ -251,7 +253,7 @@ fun TimelineRow(
             }
         Surface(
             modifier = surfaceModifier,
-            color = if (spec.playing) spec.accent.copy(alpha = 0.22f)
+            color = if (spec.playing || selected) spec.accent.copy(alpha = 0.22f)
                 else MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(14.dp),
         ) {

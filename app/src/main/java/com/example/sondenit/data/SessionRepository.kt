@@ -132,6 +132,24 @@ class SessionRepository(context: Context) {
         refreshStatsCache(id)
     }
 
+    fun markMotionEventsFavorite(
+        id: String,
+        motionEvents: Collection<SessionEvent.Motion>,
+        favorite: Boolean = true,
+    ) {
+        updateMotionEvents(id, motionEvents) { it.copy(favorite = favorite) }
+    }
+
+    fun deleteMotionEvents(id: String, motionEvents: Collection<SessionEvent.Motion>) {
+        if (motionEvents.isEmpty()) return
+        val targets = motionEvents.map { MotionEventKey(it.timestamp, it.durationMs) }.toSet()
+        val kept = readEvents(id).filterNot { event ->
+            event is SessionEvent.Motion && MotionEventKey(event.timestamp, event.durationMs) in targets
+        }
+        writeEvents(id, kept)
+        refreshStatsCache(id)
+    }
+
     fun readEvents(id: String): List<SessionEvent> {
         val f = File(sessionDir(id), EVENTS_FILE)
         if (!f.exists()) return emptyList()
@@ -152,6 +170,24 @@ class SessionRepository(context: Context) {
         val targets = chunks.map { AudioChunkKey(it.timestamp, it.file) }.toSet()
         val events = readEvents(id).map { event ->
             if (event is SessionEvent.AudioChunk && AudioChunkKey(event.timestamp, event.file) in targets) {
+                transform(event)
+            } else {
+                event
+            }
+        }
+        writeEvents(id, events)
+        refreshStatsCache(id)
+    }
+
+    private fun updateMotionEvents(
+        id: String,
+        motionEvents: Collection<SessionEvent.Motion>,
+        transform: (SessionEvent.Motion) -> SessionEvent.Motion,
+    ) {
+        if (motionEvents.isEmpty()) return
+        val targets = motionEvents.map { MotionEventKey(it.timestamp, it.durationMs) }.toSet()
+        val events = readEvents(id).map { event ->
+            if (event is SessionEvent.Motion && MotionEventKey(event.timestamp, event.durationMs) in targets) {
                 transform(event)
             } else {
                 event
@@ -217,4 +253,9 @@ class SessionRepository(context: Context) {
 private data class AudioChunkKey(
     val timestamp: Long,
     val file: String,
+)
+
+private data class MotionEventKey(
+    val timestamp: Long,
+    val durationMs: Long,
 )
