@@ -518,6 +518,7 @@ private fun CompactLayout(
     onEditMotionEvent: (SessionEvent.Motion) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val timelineHeaderIndex = compactTimelineHeaderIndex(stats.sleptDurationMs > 0)
     LaunchedEffect(playback?.timestamp, timelineRows) {
         playback?.timestamp?.let { ts ->
@@ -556,6 +557,9 @@ private fun CompactLayout(
                     playheadTimestamp = playheadTimestamp,
                     onSeekTimestamp = { ts ->
                         onMapSeek(ts)
+                    },
+                    onSeekFinished = { ts ->
+                        scrollTimelineTo(scope, listState, timelineHeaderIndex, timelineRows, ts)
                     },
                     title = stringResource(R.string.event_ribbon),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),
@@ -607,6 +611,7 @@ private fun WidePortraitLayout(
     onEditMotionEvent: (SessionEvent.Motion) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val timelineHeaderIndex = widePortraitTimelineHeaderIndex(stats.sleptDurationMs > 0)
     LaunchedEffect(playback?.timestamp, timelineRows) {
         playback?.timestamp?.let { ts ->
@@ -665,6 +670,9 @@ private fun WidePortraitLayout(
                     playheadTimestamp = playheadTimestamp,
                     onSeekTimestamp = { ts ->
                         onMapSeek(ts)
+                    },
+                    onSeekFinished = { ts ->
+                        scrollTimelineTo(scope, listState, timelineHeaderIndex, timelineRows, ts)
                     },
                     title = stringResource(R.string.event_ribbon),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SECTION_PAD),

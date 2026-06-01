@@ -32,6 +32,7 @@ import com.example.sondenit.ui.theme.OnNightMuted
 import com.example.sondenit.ui.theme.PinkDawn
 import com.example.sondenit.ui.theme.SkyTeal
 import com.example.sondenit.util.formatTimeOfDay
+import kotlin.math.abs
 
 /**
  * Horizontal "tape" that condenses an entire night into one bar. The full
@@ -52,6 +53,7 @@ fun EventRibbon(
     title: String,
     playheadTimestamp: Long? = null,
     onSeekTimestamp: ((Long) -> Unit)? = null,
+    onSeekFinished: ((Long) -> Unit)? = null,
 ) {
     val total = (sessionEnd - sessionStart).coerceAtLeast(1L)
 
@@ -68,26 +70,36 @@ fun EventRibbon(
                 .fillMaxWidth()
                 .height(40.dp)
                 .then(
-                    if (onSeekTimestamp == null) Modifier else Modifier.pointerInput(
+                    if (onSeekTimestamp == null && onSeekFinished == null) Modifier else Modifier.pointerInput(
                         sessionStart,
                         sessionEnd,
                         onSeekTimestamp,
+                        onSeekFinished,
                     ) {
-                        fun seekAt(x: Float) {
+                        fun seekAt(x: Float): Long {
                             val width = size.width.coerceAtLeast(1)
                             val fraction = (x / width).coerceIn(0f, 1f)
-                            onSeekTimestamp(
-                                sessionStart + (fraction * total).toLong(),
-                            )
+                            val timestamp = sessionStart + (fraction * total).toLong()
+                            onSeekTimestamp?.invoke(timestamp)
+                            return timestamp
                         }
 
+                        val finishSlop = 8.dp.toPx()
                         awaitEachGesture {
                             val down = awaitFirstDown()
                             down.consume()
-                            seekAt(down.position.x)
+                            var latestTimestamp = seekAt(down.position.x)
+                            var dragged = false
+                            val startX = down.position.x
                             drag(down.id) { change ->
                                 change.consume()
-                                seekAt(change.position.x)
+                                if (abs(change.position.x - startX) >= finishSlop) {
+                                    dragged = true
+                                }
+                                latestTimestamp = seekAt(change.position.x)
+                            }
+                            if (dragged) {
+                                onSeekFinished?.invoke(latestTimestamp)
                             }
                         }
                     },
