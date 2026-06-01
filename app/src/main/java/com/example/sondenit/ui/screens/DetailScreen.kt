@@ -1400,46 +1400,61 @@ private fun SummaryCard(
         shape = RoundedCornerShape(24.dp),
         color = NightSurface,
     ) {
-        Column(Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Bedtime,
-                    contentDescription = null,
-                    tint = MoonGlow,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.session_summary),
-                    color = OnNight,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Spacer(Modifier.height(14.dp))
-            Text(
-                text = formatDurationShort(stats.sleptDurationMs),
-                color = OnNight,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = stringResource(R.string.hours_slept),
-                color = OnNightMuted,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(Modifier.height(6.dp))
+        Column(Modifier.padding(16.dp)) {
             val range = if (session.endedAt != null) {
                 "${formatTimeOfDay(session.startedAt)} – ${formatTimeOfDay(session.endedAt)}"
             } else {
                 formatTimeOfDay(session.startedAt) + " — en curs"
             }
-            Text(
-                text = range,
-                color = OnNightMuted,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Spacer(Modifier.height(14.dp))
-            QualityBadge(score = stats.qualityScore)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Bedtime,
+                        contentDescription = null,
+                        tint = MoonGlow,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.session_summary),
+                        color = OnNight,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                QualityBadge(score = stats.qualityScore)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = formatDurationShort(stats.sleptDurationMs),
+                    color = OnNight,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = stringResource(R.string.hours_slept),
+                        color = OnNightMuted,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = range,
+                        color = OnNightMuted,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
         }
     }
 }
@@ -1482,14 +1497,14 @@ private fun QualityBadge(score: Int) {
         shape = RoundedCornerShape(50),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = Icons.Filled.Star,
                 contentDescription = null,
                 tint = color,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(16.dp),
             )
             Spacer(Modifier.width(6.dp))
             Text(

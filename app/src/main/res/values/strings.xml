@@ -97,7 +97,7 @@
     <string name="phase_light">Lleuger</string>
     <string name="phase_deep">Profund</string>
     <string name="phase_rem">REM</string>
-    <string name="quality">Qualitat del son</string>
+    <string name="quality">Qualitat</string>
     <string name="quality_good">Bona</string>
     <string name="quality_fair">Acceptable</string>
     <string name="quality_poor">Pobra</string>
