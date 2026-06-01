@@ -9,6 +9,11 @@
     <string name="breathing_button">Respira</string>
     <string name="no_sessions">Encara no hi ha sessions enregistrades.\nQuan vagis a dormir, prem el botó de dalt.</string>
     <string name="past_sessions">Sessions anteriors</string>
+    <string name="main_menu">Menú principal</string>
+    <string name="credits">Credits</string>
+    <string name="credits_author">Sergi Àlvarez i Capilla (pancake)</string>
+    <string name="credits_year">2026</string>
+    <string name="credits_license">SonDeNit llicencia MIT</string>
 
     <!-- Exercici de respiració -->
     <string name="breathing_title">Respira</string>

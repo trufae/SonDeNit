@@ -26,11 +26,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.NightsStay
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -395,6 +397,9 @@ private fun LazyListScope.sessionListItems(
 
 @Composable
 private fun Header(onOpenSettings: () -> Unit) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showCredits by rememberSaveable { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -426,13 +431,55 @@ private fun Header(onOpenSettings: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        IconButton(onClick = onOpenSettings) {
-            Icon(
-                imageVector = Icons.Filled.Settings,
-                contentDescription = stringResource(R.string.settings),
-                tint = OnNight,
-            )
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(
+                    imageVector = Icons.Filled.Menu,
+                    contentDescription = stringResource(R.string.main_menu),
+                    tint = OnNight,
+                )
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.settings)) },
+                    onClick = {
+                        menuExpanded = false
+                        onOpenSettings()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.credits)) },
+                    onClick = {
+                        menuExpanded = false
+                        showCredits = true
+                    },
+                )
+            }
         }
+    }
+
+    if (showCredits) {
+        AlertDialog(
+            onDismissRequest = { showCredits = false },
+            confirmButton = {
+                TextButton(onClick = { showCredits = false }) {
+                    Text(stringResource(R.string.close))
+                }
+            },
+            title = { Text(stringResource(R.string.credits)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.credits_author))
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.credits_year))
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.credits_license))
+                }
+            },
+        )
     }
 }
 
