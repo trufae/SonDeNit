@@ -35,6 +35,11 @@
     <string name="settings_equalization_description">A 0%% els sons es desen amb el volum capturat. Amb valors alts, els sons fluixos es pugen abans de desar-los perquè siguin més fàcils d\'escoltar; això també pot fer que sons llunyans semblin més propers i forts.</string>
     <string name="settings_equalization_natural">Natural</string>
     <string name="settings_equalization_strong">Més igualat</string>
+    <string name="settings_playback_amplification_title">Amplificació del so</string>
+    <string name="settings_playback_amplification_hint">%1$d%%</string>
+    <string name="settings_playback_amplification_description">Aquest ajust només s\'aplica quan escoltes enregistraments dins l\'app. A 0%% es reprodueixen amb el volum normal; amb valors més alts, el reproductor afegeix guany perquè els sons fluixos siguin més audibles. No canvia ni torna a desar els fitxers gravats.</string>
+    <string name="settings_playback_amplification_normal">Normal</string>
+    <string name="settings_playback_amplification_louder">Més fort</string>
     <string name="settings_start_delay_title">Espera abans de gravar</string>
     <string name="settings_start_delay_description">Temps de compte enrere abans d\'activar el micròfon en començar una sessió.</string>
     <string name="settings_start_delay_none">Sense espera</string>
@@ -123,7 +128,7 @@
     <string name="play_chunk">Reprodueix</string>
     <string name="play_all_audio">Reprodueix tots els sons</string>
     <string name="session_menu">Opcions</string>
-    <string name="menu_play_all_audio">Reproduir tots els son</string>
+    <string name="menu_play_all_audio">Reproduir tots els sons</string>
     <string name="menu_edit_title">Editar titol</string>
     <string name="menu_annotations">Anotacions</string>
     <string name="menu_delete">Eliminar</string>

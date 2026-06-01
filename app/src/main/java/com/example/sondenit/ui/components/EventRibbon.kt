@@ -83,8 +83,10 @@ fun EventRibbon(
 
                         awaitEachGesture {
                             val down = awaitFirstDown()
+                            down.consume()
                             seekAt(down.position.x)
                             drag(down.id) { change ->
+                                change.consume()
                                 seekAt(change.position.x)
                             }
                         }

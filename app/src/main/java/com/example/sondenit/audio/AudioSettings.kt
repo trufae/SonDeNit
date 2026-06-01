@@ -6,9 +6,11 @@ import kotlin.math.roundToInt
 object AudioSettings {
     private const val PREFS = "audio_settings"
     private const val KEY_EQUALIZATION = "equalization_amount"
+    private const val KEY_PLAYBACK_AMPLIFICATION = "playback_amplification_amount"
     private const val KEY_RECORDING_START_DELAY_SECONDS = "recording_start_delay_seconds"
 
     const val DEFAULT_EQUALIZATION = 0.5f
+    const val DEFAULT_PLAYBACK_AMPLIFICATION = 0f
     const val DEFAULT_RECORDING_START_DELAY_SECONDS = 5
     val RECORDING_START_DELAY_OPTIONS_SECONDS = listOf(0, 3, 5, 10, 15, 20, 30)
 
@@ -21,6 +23,18 @@ object AudioSettings {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putFloat(KEY_EQUALIZATION, amount.coerceIn(0f, 1f))
+            .apply()
+    }
+
+    fun playbackAmplificationAmount(context: Context): Float =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getFloat(KEY_PLAYBACK_AMPLIFICATION, DEFAULT_PLAYBACK_AMPLIFICATION)
+            .coerceIn(0f, 1f)
+
+    fun setPlaybackAmplificationAmount(context: Context, amount: Float) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(KEY_PLAYBACK_AMPLIFICATION, amount.coerceIn(0f, 1f))
             .apply()
     }
 

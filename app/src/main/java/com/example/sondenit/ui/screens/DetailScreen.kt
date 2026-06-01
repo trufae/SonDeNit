@@ -136,6 +136,7 @@ private data class PlaybackState(
 fun DetailScreen(
     repo: SessionRepository,
     session: SleepSession,
+    playbackAmplificationAmount: Float,
     onBack: () -> Unit,
     onRename: (SleepSession, String) -> Unit,
     onUpdateNotes: (SleepSession, String) -> Unit,
@@ -205,6 +206,7 @@ fun DetailScreen(
         playAudioChunks(
             player = player,
             sessionDir = sessionDir,
+            playbackAmplificationAmount = playbackAmplificationAmount,
             chunks = group.chunks,
             onStarted = { chunk ->
                 playback = PlaybackState(chunk.file, chunk.timestamp)
@@ -217,6 +219,7 @@ fun DetailScreen(
         playAudioChunks(
             player = player,
             sessionDir = sessionDir,
+            playbackAmplificationAmount = playbackAmplificationAmount,
             chunks = audioChunks,
             onStarted = { chunk ->
                 playback = PlaybackState(chunk.file, chunk.timestamp)
@@ -1057,6 +1060,7 @@ private fun buildTimelineRows(
 private fun playAudioChunks(
     player: AudioPlayer,
     sessionDir: File,
+    playbackAmplificationAmount: Float,
     chunks: List<SessionEvent.AudioChunk>,
     onStarted: (SessionEvent.AudioChunk) -> Unit,
     onFinished: () -> Unit,
@@ -1077,7 +1081,7 @@ private fun playAudioChunks(
         }
 
         runCatching {
-            player.play(file) { playAt(index + 1) }
+            player.play(file, playbackAmplificationAmount) { playAt(index + 1) }
         }.onSuccess {
             onStarted(chunk)
         }.onFailure {

@@ -104,6 +104,9 @@ private fun AppRoot() {
     var equalizationAmount by remember {
         mutableStateOf(AudioSettings.equalizationAmount(context.applicationContext))
     }
+    var playbackAmplificationAmount by remember {
+        mutableStateOf(AudioSettings.playbackAmplificationAmount(context.applicationContext))
+    }
     var recordingStartDelaySeconds by remember {
         mutableStateOf(AudioSettings.recordingStartDelaySeconds(context.applicationContext))
     }
@@ -235,10 +238,15 @@ private fun AppRoot() {
                     SettingsScreen(
                         micGranted = micGranted,
                         equalizationAmount = equalizationAmount,
+                        playbackAmplificationAmount = playbackAmplificationAmount,
                         recordingStartDelaySeconds = recordingStartDelaySeconds,
                         onEqualizationChange = { amount ->
                             equalizationAmount = amount
                             AudioSettings.setEqualizationAmount(context.applicationContext, amount)
+                        },
+                        onPlaybackAmplificationChange = { amount ->
+                            playbackAmplificationAmount = amount
+                            AudioSettings.setPlaybackAmplificationAmount(context.applicationContext, amount)
                         },
                         onRecordingStartDelayChange = { seconds ->
                             recordingStartDelaySeconds = seconds
@@ -279,6 +287,7 @@ private fun AppRoot() {
                         DetailScreen(
                             repo = repo,
                             session = session,
+                            playbackAmplificationAmount = playbackAmplificationAmount,
                             onBack = { screen = Screen.Home; sessions = repo.listSessions() },
                             onRename = { sess, newName ->
                                 repo.rename(sess.id, newName)

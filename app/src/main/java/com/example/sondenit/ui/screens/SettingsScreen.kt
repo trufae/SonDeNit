@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
@@ -76,8 +77,10 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     micGranted: Boolean,
     equalizationAmount: Float,
+    playbackAmplificationAmount: Float,
     recordingStartDelaySeconds: Int,
     onEqualizationChange: (Float) -> Unit,
+    onPlaybackAmplificationChange: (Float) -> Unit,
     onRecordingStartDelayChange: (Int) -> Unit,
     onRequestMic: () -> Unit,
     onBack: () -> Unit,
@@ -115,6 +118,12 @@ fun SettingsScreen(
                 EqualizationPanel(
                     amount = equalizationAmount,
                     onChange = onEqualizationChange,
+                )
+            }
+            item {
+                PlaybackAmplificationPanel(
+                    amount = playbackAmplificationAmount,
+                    onChange = onPlaybackAmplificationChange,
                 )
             }
             item {
@@ -167,7 +176,7 @@ fun SettingsScreen(
                             player.stop()
                             isPlaying = false
                         } else {
-                            player.play(file) { isPlaying = false }
+                            player.play(file, playbackAmplificationAmount) { isPlaying = false }
                             isPlaying = true
                         }
                     },
@@ -243,6 +252,49 @@ private fun EqualizationPanel(amount: Float, onChange: (Float) -> Unit) {
             )
             Text(
                 text = stringResource(R.string.settings_equalization_strong),
+                color = OnNightMuted,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaybackAmplificationPanel(amount: Float, onChange: (Float) -> Unit) {
+    SettingsPanel {
+        IconTitle(
+            icon = Icons.AutoMirrored.Filled.VolumeUp,
+            accent = MoonGlow,
+            title = stringResource(R.string.settings_playback_amplification_title),
+            value = stringResource(
+                R.string.settings_playback_amplification_hint,
+                AudioSettings.percent(amount),
+            ),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.settings_playback_amplification_description),
+            color = OnNightMuted,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Slider(
+            value = amount,
+            onValueChange = onChange,
+            valueRange = 0f..1f,
+            colors = SliderDefaults.colors(
+                thumbColor = MoonGlow,
+                activeTrackColor = MoonGlow,
+                inactiveTrackColor = MoonGlow.copy(alpha = 0.25f),
+            ),
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                text = stringResource(R.string.settings_playback_amplification_normal),
+                color = OnNightMuted,
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Text(
+                text = stringResource(R.string.settings_playback_amplification_louder),
                 color = OnNightMuted,
                 style = MaterialTheme.typography.labelSmall,
             )
