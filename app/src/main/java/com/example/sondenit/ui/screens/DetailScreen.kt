@@ -1670,13 +1670,6 @@ private fun PhasesSection(
         ),
     )
     Column(Modifier.padding(horizontal = outerPadding)) {
-        Text(
-            text = stringResource(R.string.phases),
-            color = OnNight,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(12.dp))
         Box(modifier = Modifier.widthIn(max = if (legendBelow) chartMaxSize else Dp.Infinity)) {
             PieChartWithLegend(
                 slices = slices,
