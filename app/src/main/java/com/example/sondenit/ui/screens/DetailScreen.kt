@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Vibration
@@ -67,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,7 +89,6 @@ import com.example.sondenit.data.SoundClass
 import com.example.sondenit.ui.components.EventRibbon
 import com.example.sondenit.ui.components.PieChartWithLegend
 import com.example.sondenit.ui.components.PieSlice
-import com.example.sondenit.ui.components.StatCard
 import com.example.sondenit.ui.components.TimelineRow
 import com.example.sondenit.ui.components.describe
 import com.example.sondenit.ui.components.describeGroup
@@ -583,7 +584,6 @@ private fun CompactLayout(
                 Spacer(Modifier.height(16.dp))
                 AnalysisSliders(groupSeconds, onGroupChange, minIntSeconds, onMinIntChange)
             }
-            item { Spacer(Modifier.height(16.dp)); StatsGrid(stats) }
         }
         timelineSection(
             timelineRows = timelineRows,
@@ -664,16 +664,9 @@ private fun WidePortraitLayout(
                                 outerPadding = 0.dp,
                                 chartMaxSize = 180.dp,
                             )
-                            Spacer(Modifier.height(16.dp))
-                            SignalsCard(stats, outerPadding = 0.dp)
                         }
                     }
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        StatsGrid(stats, outerPadding = 0.dp)
-                    }
+                    SignalsCard(stats, outerPadding = 0.dp, modifier = Modifier.weight(1f))
                 }
             }
             item {
@@ -796,7 +789,6 @@ private fun SplitLayout(
                     Spacer(Modifier.height(16.dp))
                     AnalysisSliders(groupSeconds, onGroupChange, minIntSeconds, onMinIntChange)
                 }
-                item { Spacer(Modifier.height(16.dp)); StatsGrid(stats) }
             }
         }
         // Divider
@@ -1679,70 +1671,156 @@ private fun PhasesSection(
                 legendBelow = legendBelow,
             )
         }
+        EventStatsGrid(stats)
     }
 }
 
+private data class EventStatItem(
+    val icon: ImageVector,
+    val accent: Color,
+    val value: String,
+    val contentDescription: String,
+)
+
 @Composable
-private fun StatsGrid(stats: SessionStats, outerPadding: Dp = SECTION_PAD) {
-    Column(
-        Modifier.padding(horizontal = outerPadding),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard(
-                icon = Icons.Filled.NotificationsActive,
-                accent = PinkDawn,
-                label = stringResource(R.string.interruptions),
-                value = stats.interruptions.toString(),
-                modifier = Modifier.weight(1f),
-            )
-            StatCard(
-                icon = Icons.Filled.GraphicEq,
-                accent = MoonGlow,
-                label = stringResource(R.string.noise_events),
-                value = "${stats.audioGroupCount} / ${stats.audioChunkCount}",
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard(
-                icon = Icons.Filled.PhoneAndroid,
-                accent = Lavender,
-                label = stringResource(R.string.screen_events),
-                value = stats.screenOnEvents.toString(),
-                modifier = Modifier.weight(1f),
-            )
-            StatCard(
-                icon = Icons.Filled.Insights,
-                accent = SkyTeal,
-                label = stringResource(R.string.ambient_avg),
-                value = "%.0f dB".format(stats.ambientAvgDb),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard(
-                icon = Icons.Filled.Vibration,
-                accent = SkyTeal,
-                label = stringResource(R.string.movement_events),
-                value = stats.movementEvents.toString(),
-                modifier = Modifier.weight(1f),
-            )
-            StatCard(
-                icon = Icons.Filled.Insights,
-                accent = Lavender,
-                label = stringResource(R.string.wake_movement_events),
-                value = stats.wakeMovementEvents.toString(),
-                modifier = Modifier.weight(1f),
-            )
+private fun EventStatsGrid(stats: SessionStats) {
+    val items = eventStatItems(stats)
+    if (items.isEmpty()) return
+
+    Spacer(Modifier.height(10.dp))
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columns = if (maxWidth < 360.dp) 3 else 4
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items.chunked(columns).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    rowItems.forEach { item ->
+                        EventStatCard(
+                            item = item,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(columns - rowItems.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SignalsCard(stats: SessionStats, outerPadding: Dp = SECTION_PAD) {
+private fun EventStatCard(
+    item: EventStatItem,
+    modifier: Modifier = Modifier,
+) {
     Surface(
-        modifier = Modifier
+        modifier = modifier.height(42.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = item.contentDescription,
+                tint = item.accent,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = item.value,
+                color = OnNight,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun eventStatItems(stats: SessionStats): List<EventStatItem> {
+    val items = mutableListOf<EventStatItem>()
+
+    items.addCountStat(
+        count = stats.interruptions,
+        icon = Icons.Filled.NotificationsActive,
+        accent = PinkDawn,
+        contentDescription = stringResource(R.string.interruptions),
+    )
+    items.addCountStat(
+        count = stats.screenOnEvents,
+        icon = Icons.Filled.PhoneAndroid,
+        accent = Lavender,
+        contentDescription = stringResource(R.string.screen_events),
+    )
+    items.addCountStat(
+        count = stats.movementEvents,
+        icon = Icons.Filled.Vibration,
+        accent = SkyTeal,
+        contentDescription = stringResource(R.string.movement_events),
+    )
+    items.addCountStat(
+        count = stats.wakeMovementEvents,
+        icon = Icons.Filled.PhoneAndroid,
+        accent = PinkDawn,
+        contentDescription = stringResource(R.string.wake_movement_events),
+    )
+
+    EDITABLE_SOUND_CLASSES.forEach { klass ->
+        items.addCountStat(
+            count = stats.audioChunksByClass[klass] ?: 0,
+            icon = soundClassIcon(klass),
+            accent = soundClassColor(klass),
+            contentDescription = soundClassLabel(klass),
+        )
+    }
+
+    return items
+}
+
+private fun MutableList<EventStatItem>.addCountStat(
+    count: Int,
+    icon: ImageVector,
+    accent: Color,
+    contentDescription: String,
+) {
+    if (count <= 0) return
+    add(
+        EventStatItem(
+            icon = icon,
+            accent = accent,
+            value = formatStatCount(count),
+            contentDescription = contentDescription,
+        )
+    )
+}
+
+private fun formatStatCount(count: Int): String =
+    if (count > 999) "999+" else count.toString()
+
+private fun soundClassIcon(klass: SoundClass): ImageVector = when (klass) {
+    SoundClass.SPEECH -> Icons.Filled.RecordVoiceOver
+    SoundClass.MOVEMENT -> Icons.Filled.Vibration
+    else -> Icons.Filled.GraphicEq
+}
+
+@Composable
+private fun SignalsCard(
+    stats: SessionStats,
+    outerPadding: Dp = SECTION_PAD,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = outerPadding),
         shape = RoundedCornerShape(20.dp),
