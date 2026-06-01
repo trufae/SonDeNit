@@ -488,10 +488,17 @@ private fun CompactLayout(
         state = listState,
         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
     ) {
-        item { SummaryCard(session, stats) }
-        item { CommentsSection(session.notes, onEditNotes) }
+        item { SummaryCard(session, stats, onEditNotes) }
+        item { NotesSection(session.notes) }
         if (stats.sleptDurationMs > 0) {
-            item { Spacer(Modifier.height(16.dp)); PhasesSection(stats, legendBelow = true) }
+            item {
+                Spacer(Modifier.height(16.dp))
+                PhasesSection(
+                    stats = stats,
+                    legendBelow = false,
+                    chartMaxSize = 180.dp,
+                )
+            }
             item {
                 Spacer(Modifier.height(16.dp))
                 EventRibbon(
@@ -572,8 +579,8 @@ private fun WidePortraitLayout(
         state = listState,
         contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
     ) {
-        item { SummaryCard(session, stats) }
-        item { CommentsSection(session.notes, onEditNotes) }
+        item { SummaryCard(session, stats, onEditNotes) }
+        item { NotesSection(session.notes) }
         if (stats.sleptDurationMs > 0) {
             item {
                 Spacer(Modifier.height(16.dp))
@@ -587,9 +594,9 @@ private fun WidePortraitLayout(
                     Box(modifier = Modifier.weight(1f)) {
                         PhasesSection(
                             stats = stats,
-                            legendBelow = true,
+                            legendBelow = false,
                             outerPadding = 0.dp,
-                            chartMaxSize = 240.dp,
+                            chartMaxSize = 180.dp,
                         )
                     }
                     Column(
@@ -681,8 +688,8 @@ private fun SplitLayout(
                 .fillMaxHeight(),
             contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
         ) {
-            item { SummaryCard(session, stats) }
-            item { CommentsSection(session.notes, onEditNotes) }
+            item { SummaryCard(session, stats, onEditNotes) }
+            item { NotesSection(session.notes) }
             if (stats.sleptDurationMs > 0) {
                 item {
                     Spacer(Modifier.height(16.dp))
@@ -1288,7 +1295,11 @@ private fun TopBar(
             )
         }
         Spacer(Modifier.width(4.dp))
-        Column(Modifier.weight(1f)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable(onClick = onRename)
+        ) {
             Text(
                 text = title,
                 color = OnNight,
@@ -1319,7 +1330,11 @@ private fun TopBar(
 }
 
 @Composable
-private fun SummaryCard(session: SleepSession, stats: SessionStats) {
+private fun SummaryCard(
+    session: SleepSession,
+    stats: SessionStats,
+    onEditNotes: () -> Unit,
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -1328,19 +1343,49 @@ private fun SummaryCard(session: SleepSession, stats: SessionStats) {
         color = NightSurface,
     ) {
         Column(Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Bedtime,
-                    contentDescription = null,
-                    tint = MoonGlow,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.session_summary),
-                    color = OnNight,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Bedtime,
+                        contentDescription = null,
+                        tint = MoonGlow,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.session_summary),
+                        color = OnNight,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Button(
+                    onClick = onEditNotes,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MoonGlow,
+                        contentColor = NightDeep,
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Notes,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.comments),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
             Spacer(Modifier.height(14.dp))
             Text(
@@ -1372,49 +1417,29 @@ private fun SummaryCard(session: SleepSession, stats: SessionStats) {
 }
 
 @Composable
-private fun CommentsSection(notes: String, onEditNotes: () -> Unit) {
+private fun NotesSection(notes: String) {
+    val trimmed = notes.trim()
+    if (trimmed.isEmpty()) {
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = SECTION_PAD),
     ) {
         Spacer(Modifier.height(10.dp))
-        Button(
-            onClick = onEditNotes,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MoonGlow,
-                contentColor = NightDeep,
-            ),
-            shape = RoundedCornerShape(16.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            color = NightSurface.copy(alpha = 0.72f),
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Notes,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
             Text(
-                text = stringResource(R.string.comments),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
+                text = trimmed,
+                color = OnNight,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(16.dp),
             )
-        }
-        val trimmed = notes.trim()
-        if (trimmed.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                color = NightSurface.copy(alpha = 0.72f),
-            ) {
-                Text(
-                    text = trimmed,
-                    color = OnNight,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
         }
     }
 }

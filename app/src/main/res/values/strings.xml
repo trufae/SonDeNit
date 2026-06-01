@@ -80,7 +80,7 @@
     <string name="cancel">Cancel·la</string>
 
     <!-- Detall sessió -->
-    <string name="session_summary">Resum del son</string>
+    <string name="session_summary">Resum</string>
     <string name="comments">Comentaris..</string>
     <string name="comments_dialog_title">Comentaris</string>
     <string name="comments_field_label">Notes</string>
@@ -102,7 +102,7 @@
     <string name="movement_events">Moviments detectats</string>
     <string name="wake_movement_events">Mòbil mogut</string>
     <string name="signals">Indicis detectats</string>
-    <string name="signal_speech">Possibles parlaments mentre dormies</string>
+    <string name="signal_speech">Possibles paraules mentre dormies</string>
     <string name="signal_cough">Possibles tos o esternuts</string>
     <string name="signal_movement">Possible moviment al llit o amb el mòbil</string>
     <string name="signal_snore">Possibles roncs o respiració profunda</string>
@@ -111,7 +111,7 @@
     <string name="signal_cat">Possibles miols de gat</string>
     <string name="no_signals">No s\'han detectat senyals especials. Sembla un son tranquil.</string>
     <string name="grouping_window">Agrupar sons propers</string>
-    <string name="grouping_window_hint">%1$s de marge entre sons</string>
+    <string name="grouping_window_hint">%1$s entre sons</string>
     <string name="grouping_off">Sense agrupar</string>
     <string name="min_interruption">Durada mínima d\'interrupció</string>
     <string name="min_interruption_hint">A partir de %1$s de so</string>
