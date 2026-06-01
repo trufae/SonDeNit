@@ -1,5 +1,6 @@
 package com.example.sondenit.ui.screens
 
+import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,9 +43,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -99,6 +103,7 @@ fun BreathingScreen(
     var cycle by remember { mutableIntStateOf(1) }
     var complete by remember { mutableStateOf(false) }
     var runId by remember { mutableIntStateOf(0) }
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     DisposableEffect(lifecycleOwner, player) {
         val observer = LifecycleEventObserver { _, event ->
@@ -188,52 +193,193 @@ fun BreathingScreen(
             )
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 56.dp, bottom = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = stringResource(R.string.breathing_title),
-                    color = OnNight,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.breathing_guidance),
-                    color = OnNightMuted,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            BreathingCircle(
-                progress = circleProgress,
+        if (isLandscape) {
+            LandscapeBreathingContent(
+                circleProgress = circleProgress,
                 phase = phase,
+                phaseProgress = phaseProgress,
+                phaseElapsedMillis = phaseElapsedMillis,
+                totalElapsedMillis = totalElapsedMillis,
                 cycle = cycle,
                 complete = complete,
+                onClose = onClose,
+                onRepeat = { runId++ },
             )
+        } else {
+            PortraitBreathingContent(
+                circleProgress = circleProgress,
+                phase = phase,
+                phaseProgress = phaseProgress,
+                phaseElapsedMillis = phaseElapsedMillis,
+                totalElapsedMillis = totalElapsedMillis,
+                cycle = cycle,
+                complete = complete,
+                onClose = onClose,
+                onRepeat = { runId++ },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PortraitBreathingContent(
+    circleProgress: Float,
+    phase: BreathPhase,
+    phaseProgress: Float,
+    phaseElapsedMillis: Int,
+    totalElapsedMillis: Int,
+    cycle: Int,
+    complete: Boolean,
+    onClose: () -> Unit,
+    onRepeat: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 56.dp, bottom = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        BreathingIntroText(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            textAlign = TextAlign.Center,
+        )
+
+        BreathingCircle(
+            progress = circleProgress,
+            phase = phase,
+            cycle = cycle,
+            complete = complete,
+        )
+
+        if (complete) {
+            CompletionActions(
+                onClose = onClose,
+                onRepeat = onRepeat,
+            )
+        } else {
+            BreathingProgress(
+                phase = phase,
+                phaseProgress = phaseProgress,
+                phaseElapsedMillis = phaseElapsedMillis,
+                totalProgress = totalElapsedMillis.toFloat() / TotalExerciseMillis,
+                totalElapsedMillis = totalElapsedMillis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LandscapeBreathingContent(
+    circleProgress: Float,
+    phase: BreathPhase,
+    phaseProgress: Float,
+    phaseElapsedMillis: Int,
+    totalElapsedMillis: Int,
+    cycle: Int,
+    complete: Boolean,
+    onClose: () -> Unit,
+    onRepeat: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 28.dp, end = 48.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            BreathingIntroText(
+                horizontalAlignment = Alignment.Start,
+                textAlign = TextAlign.Start,
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                BreathingStatusText(
+                    phase = phase,
+                    cycle = cycle,
+                    complete = complete,
+                    textAlign = TextAlign.Start,
+                )
+                if (!complete) {
+                    Spacer(Modifier.height(18.dp))
+                    BreathingProgressLabels(
+                        phase = phase,
+                        phaseElapsedMillis = phaseElapsedMillis,
+                        totalElapsedMillis = totalElapsedMillis,
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    BreathingSafetyNote(textAlign = TextAlign.Start)
+                }
+            }
 
             if (complete) {
                 CompletionActions(
                     onClose = onClose,
-                    onRepeat = { runId++ },
-                )
-            } else {
-                BreathingProgress(
-                    phase = phase,
-                    phaseProgress = phaseProgress,
-                    phaseElapsedMillis = phaseElapsedMillis,
-                    totalProgress = totalElapsedMillis.toFloat() / TotalExerciseMillis,
-                    totalElapsedMillis = totalElapsedMillis,
+                    onRepeat = onRepeat,
                 )
             }
         }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            BreathingBall(
+                progress = circleProgress,
+                phase = phase,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                baseSize = 132.dp,
+                growthSize = 96.dp,
+            )
+            if (!complete) {
+                BreathingProgressBars(
+                    phase = phase,
+                    phaseProgress = phaseProgress,
+                    totalProgress = totalElapsedMillis.toFloat() / TotalExerciseMillis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BreathingIntroText(
+    horizontalAlignment: Alignment.Horizontal,
+    textAlign: TextAlign,
+) {
+    Column(horizontalAlignment = horizontalAlignment) {
+        Text(
+            text = stringResource(R.string.breathing_title),
+            color = OnNight,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = textAlign,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.breathing_guidance),
+            color = OnNightMuted,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = textAlign,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -244,23 +390,46 @@ private fun BreathingCircle(
     cycle: Int,
     complete: Boolean,
 ) {
-    val circleSize = 156.dp + 132.dp * progress
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(340.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        BreathingBall(
+            progress = progress,
+            phase = phase,
+            modifier = Modifier
+                .size(264.dp),
+        )
+        Spacer(Modifier.height(14.dp))
+        BreathingStatusText(
+            phase = phase,
+            cycle = cycle,
+            complete = complete,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun BreathingBall(
+    progress: Float,
+    phase: BreathPhase,
+    modifier: Modifier = Modifier.size(264.dp),
+    baseSize: Dp = 156.dp,
+    growthSize: Dp = 104.dp,
+) {
+    val circleSize = baseSize + growthSize * progress
     val phaseColor by animateColorAsState(
         targetValue = phaseColor(phase),
         animationSpec = tween(durationMillis = 450),
         label = "breathingPhaseColor",
     )
-    val phaseText = when {
-        complete -> stringResource(R.string.breathing_done)
-        phase == BreathPhase.Inhale -> stringResource(R.string.breathing_inhale)
-        phase == BreathPhase.Hold -> stringResource(R.string.breathing_hold)
-        else -> stringResource(R.string.breathing_exhale)
-    }
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(340.dp),
+        modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -270,28 +439,50 @@ private fun BreathingCircle(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.96f),
-                            phaseColor,
-                            phaseColor.copy(alpha = 0.48f),
+                            phaseColor.lighterForBreathing(),
+                            phaseColor.copy(alpha = 0.88f),
+                            phaseColor.copy(alpha = 0.42f),
                         )
                     )
                 ),
         )
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = phaseText,
-                color = OnNight,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.breathing_cycle_count, cycle, BreathCycles),
-                color = OnNight.copy(alpha = 0.8f),
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
+    }
+}
+
+@Composable
+private fun BreathingStatusText(
+    phase: BreathPhase,
+    cycle: Int,
+    complete: Boolean,
+    textAlign: TextAlign,
+) {
+    val phaseText = when {
+        complete -> stringResource(R.string.breathing_done)
+        phase == BreathPhase.Inhale -> stringResource(R.string.breathing_inhale)
+        phase == BreathPhase.Hold -> stringResource(R.string.breathing_hold)
+        else -> stringResource(R.string.breathing_exhale)
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (textAlign == TextAlign.Start) Alignment.Start else Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = phaseText,
+            color = OnNight,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = textAlign,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.breathing_cycle_count, cycle, BreathCycles),
+            color = OnNight.copy(alpha = 0.8f),
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = textAlign,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -303,12 +494,54 @@ private fun BreathingProgress(
     totalProgress: Float,
     totalElapsedMillis: Int,
 ) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        BreathingProgressLabels(
+            phase = phase,
+            phaseElapsedMillis = phaseElapsedMillis,
+            totalElapsedMillis = totalElapsedMillis,
+        )
+        BreathingProgressBars(
+            phase = phase,
+            phaseProgress = phaseProgress,
+            totalProgress = totalProgress,
+        )
+        BreathingSafetyNote(textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun BreathingProgressLabels(
+    phase: BreathPhase,
+    phaseElapsedMillis: Int,
+    totalElapsedMillis: Int,
+) {
     val phaseDurationMillis = phase.durationMillis
     val phaseElapsedSeconds = phaseElapsedMillis.toDisplaySeconds()
     val phaseRemainingSeconds = ((phaseDurationMillis - phaseElapsedMillis).coerceAtLeast(0))
         .toDisplaySeconds()
     val totalRemainingSeconds = ((TotalExerciseMillis - totalElapsedMillis).coerceAtLeast(0))
         .toDisplaySeconds()
+
+    ProgressLabelRow(
+        start = stringResource(
+            R.string.breathing_step_seconds,
+            phaseElapsedSeconds,
+            phaseRemainingSeconds,
+        ),
+        end = stringResource(R.string.breathing_total_left, totalRemainingSeconds),
+    )
+}
+
+@Composable
+private fun BreathingProgressBars(
+    phase: BreathPhase,
+    phaseProgress: Float,
+    totalProgress: Float,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+) {
     val accent by animateColorAsState(
         targetValue = phaseColor(phase),
         animationSpec = tween(durationMillis = 450),
@@ -316,17 +549,9 @@ private fun BreathingProgress(
     )
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        ProgressLabelRow(
-            start = stringResource(
-                R.string.breathing_step_seconds,
-                phaseElapsedSeconds,
-                phaseRemainingSeconds,
-            ),
-            end = stringResource(R.string.breathing_total_left, totalRemainingSeconds),
-        )
         BreathingProgressBar(
             progress = phaseProgress,
             color = accent,
@@ -337,14 +562,20 @@ private fun BreathingProgress(
             trackColor = Color.White.copy(alpha = 0.10f),
             modifier = Modifier.height(5.dp),
         )
-        Text(
-            text = stringResource(R.string.breathing_safety_note),
-            color = OnNightMuted,
-            style = MaterialTheme.typography.bodySmall,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 8.dp),
-        )
     }
+}
+
+@Composable
+private fun BreathingSafetyNote(textAlign: TextAlign) {
+    Text(
+        text = stringResource(R.string.breathing_safety_note),
+        color = OnNightMuted,
+        style = MaterialTheme.typography.bodySmall,
+        textAlign = textAlign,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = if (textAlign == TextAlign.Center) 8.dp else 0.dp),
+    )
 }
 
 @Composable
@@ -407,6 +638,13 @@ private fun phaseColor(phase: BreathPhase): Color = when (phase) {
     BreathPhase.Hold -> Color(0xFF79C7FF)
     BreathPhase.Exhale -> Color(0xFFFF78D4)
 }
+
+private fun Color.lighterForBreathing(): Color = Color(
+    red = red + (1f - red) * 0.28f,
+    green = green + (1f - green) * 0.28f,
+    blue = blue + (1f - blue) * 0.28f,
+    alpha = 0.96f,
+)
 
 private fun Int.toDisplaySeconds(): Int = ((this + 999) / 1000).coerceAtLeast(0)
 
