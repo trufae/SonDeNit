@@ -239,7 +239,44 @@ object SessionStatsComputer {
         val deepRemRatio = if (slept > 0) deepRem.toFloat() / slept else 0f
         val penalty = (interruptions * 4 + screenBursts.size * 2 + wakeMotionBursts.size * 2)
             .coerceAtMost(60)
-        val rawScore = (deepRemRatio * 100f).toInt() - penalty + 30
+
+        // Quiet-stretch bonus: a long, mostly-silent run should lift the score
+        // even if the phase classifier never reached DEEP/REM. A gap between
+        // two noise groups is "quiet" if it lasts at least 15 minutes, or if
+        // it is shorter but interrupted by at most one small noise group
+        // (total audio shorter than minInterruptionMs — the kind of tick that
+        // doesn't otherwise count as an interruption).
+        val quietMinGapMs = 15 * 60_000L
+        var quietMs = 0L
+        if (groups.size >= 2) {
+            var i = 0
+            while (i < groups.size - 1) {
+                val a = groups[i]
+                val b = groups[i + 1]
+                val gap = (b.startTimestamp - a.endTimestamp).coerceAtLeast(0L)
+                if (gap >= quietMinGapMs) {
+                    quietMs += gap
+                    i += 1
+                } else if (b.totalDurationMs < minInterruptionMs && i + 2 < groups.size) {
+                    // One small noise inside a short gap: roll the small
+                    // group's span (and the surrounding gap) into the quiet
+                    // total as long as the next gap is also short.
+                    val aGap = (b.startTimestamp - a.endTimestamp).coerceAtLeast(0L)
+                    val bGap = (groups[i + 2].startTimestamp - b.endTimestamp).coerceAtLeast(0L)
+                    val totalStretch = aGap + b.spanMs + bGap
+                    if (totalStretch >= quietMinGapMs) quietMs += totalStretch
+                    i += 2
+                } else {
+                    i += 1
+                }
+            }
+        }
+        val quietRatio = if (slept > 0) quietMs.toFloat() / slept else 0f
+        // Piecewise-linear bonus: 0 below 30% quiet, +20 at 80% or more.
+        val quietBonus = if (quietRatio <= 0.3f) 0
+        else ((quietRatio - 0.3f) / 0.5f * 20f).toInt().coerceIn(0, 20)
+
+        val rawScore = (deepRemRatio * 100f).toInt() - penalty + 30 + quietBonus
         val qualityScore = rawScore.coerceIn(0, 100)
 
         val signals = mutableListOf<DetectedSignal>()
