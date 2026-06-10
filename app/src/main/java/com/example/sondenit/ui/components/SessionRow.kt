@@ -221,7 +221,8 @@ private fun LiveDot() {
 }
 
 fun qualityColorAndLabel(score: Int): Pair<Color, String> = when {
-    score >= 70 -> Color(0xFF7DD9C8) to "Bona"
+    score >= 85 -> Color(0xFFB4F0C2) to "Excel·lent"
+    score >= 65 -> Color(0xFF7DD9C8) to "Bona"
     score >= 45 -> Color(0xFFF6C97A) to "Acceptable"
     else -> Color(0xFFFF99B6) to "Pobra"
 }

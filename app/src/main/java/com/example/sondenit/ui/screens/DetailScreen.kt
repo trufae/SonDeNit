@@ -93,6 +93,7 @@ import com.example.sondenit.ui.components.TimelineRow
 import com.example.sondenit.ui.components.describe
 import com.example.sondenit.ui.components.describeGroup
 import com.example.sondenit.ui.theme.Lavender
+import com.example.sondenit.ui.theme.MintGlow
 import com.example.sondenit.ui.theme.MoonGlow
 import com.example.sondenit.ui.theme.NightDeep
 import com.example.sondenit.ui.theme.NightMid
@@ -1627,7 +1628,8 @@ private fun QualityBadge(score: Int) {
 }
 
 private fun qualityColor(score: Int): Pair<Color, String> = when {
-    score >= 70 -> SkyTeal to "Bona"
+    score >= 85 -> MintGlow to "Excel·lent"
+    score >= 65 -> SkyTeal to "Bona"
     score >= 45 -> MoonGlow to "Acceptable"
     else -> PinkDawn to "Pobra"
 }

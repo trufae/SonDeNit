@@ -11,6 +11,7 @@ val MoonGlow = Color(0xFFF6C97A)
 val MoonGlowSoft = Color(0xFFFFE7B0)
 val Lavender = Color(0xFFB8B5FF)
 val SkyTeal = Color(0xFF7DD9C8)
+val MintGlow = Color(0xFFB4F0C2)
 val PinkDawn = Color(0xFFFF99B6)
 val DangerRed = Color(0xFFFF6B6B)
 
