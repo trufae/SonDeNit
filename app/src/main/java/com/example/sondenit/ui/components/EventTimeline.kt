@@ -155,7 +155,7 @@ fun describeGroup(group: NoiseGroup): TimelineRowSpec {
 
 fun describeSound(klass: SoundClass): Pair<String, Color> = when (klass) {
     SoundClass.SPEECH -> "Veu detectada" to Lavender
-    SoundClass.COUGH -> "Possible tos" to PinkDawn
+    SoundClass.COUGH -> "Tos" to PinkDawn
     SoundClass.MOVEMENT -> "Moviment al llit" to SkyTeal
     SoundClass.SNORE -> "Roncs / respiració" to MoonGlow
     SoundClass.DOG_BARK -> "Lladruc de gos" to PinkDawn

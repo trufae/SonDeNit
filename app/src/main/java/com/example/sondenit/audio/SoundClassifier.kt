@@ -31,10 +31,24 @@ object SoundClassifier {
             // Discriminator vs cough: louder peak, slightly less duration.
             durationMs in 80..450 && zcr in 0.07f..0.20f && above >= 18f -> SoundClass.DOG_BARK
 
-            // Sharp, brief, broadband transient → cough/sneeze.
-            // Note: post-apneic gasps also fit this profile and may be
-            // re-labelled to APNEA_GASP later by SessionStatsComputer.
-            durationMs in 60..900 && zcr > 0.10f && above >= 14f -> SoundClass.COUGH
+            // Cough (broadband). The shape of a cough is a sharp impulsive
+            // release (expulsion phase) followed by an optional recovery /
+            // inhale tail. The noise gate typically captures the whole thing
+            // as a single chunk, so the duration and ZCR vary widely:
+            //   * short dry tickle:     ~60–300 ms, ZCR 0.20–0.40, low crest
+            //   * sharp single cough:   ~100–500 ms, ZCR 0.10–0.30
+            //   * wet/gurgly cough:     ~150–500 ms, ZCR 0.06–0.15
+            //   * multi-cough / fit:    ~600–1500 ms, ZCR 0.10–0.25
+            //   * cough + inhale tail:  ~600–1500 ms, mid ZCR, low crest
+            // We accept any of these as COUGH, with a SNR floor of 10 dB
+            // (lower than before, so a quiet cough in a noisy room is no
+            // longer dropped to NOISE), and an upper duration bound of 1.5 s
+            // so we don't swallow long ESBUFEGAR (>=1.5s) or speech (which
+            // has a higher crest factor anyway).
+            durationMs in 60..1500 &&
+                zcr in 0.06f..0.40f &&
+                above >= 10f &&
+                crest <= 12f -> SoundClass.COUGH
 
             // Cat meow: mid duration, tonal (low-medium ZCR), moderate peak.
             // Discriminator vs speech: shorter and lower ZCR (more tonal).
