@@ -1682,8 +1682,8 @@ private fun PhasesSection(
         Box(modifier = Modifier.widthIn(max = if (legendBelow) chartMaxSize else Dp.Infinity)) {
             PieChartWithLegend(
                 slices = slices,
-                centerLabel = formatDurationShort(stats.sleptDurationMs),
-                centerSubLabel = stringResource(R.string.hours_slept),
+                centerLabel = null,
+                centerSubLabel = null,
                 maxChartSize = chartMaxSize,
                 legendBelow = legendBelow,
             )
