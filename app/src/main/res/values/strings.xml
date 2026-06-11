@@ -108,6 +108,7 @@
     <string name="quality_fair">Acceptable</string>
     <string name="quality_poor">Pobra</string>
     <string name="interruptions">Interrupcions</string>
+    <string name="apnea_events">Apnees detectades</string>
     <string name="noise_events">Sorolls detectats</string>
     <string name="screen_events">Vegades que has mirat el mòbil</string>
     <string name="movement_events">Moviments detectats</string>
@@ -120,6 +121,8 @@
     <string name="signal_breathing">Respiració irregular detectada</string>
     <string name="signal_dog">Possibles lladrucs de gos</string>
     <string name="signal_cat">Possibles miols de gat</string>
+    <string name="signal_apnea">Possibles pauses d\'apnea durant la nit</string>
+    <string name="signal_panting">Respiració forta o panteix detectada</string>
     <string name="no_signals">No s\'han detectat senyals especials. Sembla un son tranquil.</string>
     <string name="grouping_window">Agrupar sons propers</string>
     <string name="grouping_window_hint">%1$s entre sons</string>
@@ -159,6 +162,8 @@
     <string name="sound_type_movement">Moviment</string>
     <string name="sound_type_noise">Soroll</string>
     <string name="sound_type_unknown">So lleu</string>
+    <string name="sound_type_panting">Panteix</string>
+    <string name="sound_type_apnea_gasp">Gas d\'apnea</string>
     <string name="event_session_start">Inici de la sessió</string>
     <string name="event_session_end">Final de la sessió</string>
     <string name="event_pause">Pausa</string>

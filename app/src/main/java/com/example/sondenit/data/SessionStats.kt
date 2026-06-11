@@ -24,6 +24,7 @@ data class SessionStats(
     val movementEvents: Int,
     val wakeMovementEvents: Int,
     val interruptions: Int,
+    val apneaEvents: Int,
     val ambientAvgDb: Float,
     val phaseDurations: Map<SleepPhase, Long>,
     val qualityScore: Int, // 0..100
@@ -41,6 +42,7 @@ data class SessionStats(
         put("movementEvents", movementEvents)
         put("wakeMovementEvents", wakeMovementEvents)
         put("interruptions", interruptions)
+        put("apneaEvents", apneaEvents)
         put("ambientAvgDb", ambientAvgDb.toDouble())
         put("qualityScore", qualityScore)
         put("groupingWindowMs", groupingWindowMs)
@@ -93,6 +95,7 @@ data class SessionStats(
                 movementEvents = json.optInt("movementEvents"),
                 wakeMovementEvents = json.optInt("wakeMovementEvents"),
                 interruptions = json.optInt("interruptions"),
+                apneaEvents = json.optInt("apneaEvents"),
                 ambientAvgDb = json.optDouble("ambientAvgDb", 0.0).toFloat(),
                 phaseDurations = phases,
                 qualityScore = json.optInt("qualityScore"),
@@ -106,6 +109,7 @@ data class SessionStats(
 
 enum class DetectedSignal {
     SPEECH, COUGH, MOVEMENT, SNORE, IRREGULAR_BREATHING, DOG_BARKING, CAT_MEOWING,
+    APNEA, PANTING,
 }
 
 /**
@@ -279,6 +283,14 @@ object SessionStatsComputer {
         val rawScore = (deepRemRatio * 100f).toInt() - penalty + 30 + quietBonus
         val qualityScore = rawScore.coerceIn(0, 100)
 
+        // Apnea detection (post-hoc, on the audio chunk timeline).
+        // Pattern: crescendo-snore → ≥ 10 s silent gap → broadband onset ("gasp").
+        // The "silent gap" is implicit — audio chunks are only emitted when
+        // the noise gate fires, so a gap of ≥ 10 s between two consecutive
+        // chunks means the room was quiet for that long.
+        val apneaResult = detectApneaEvents(audio, ambientAvg)
+        val apneaEvents = apneaResult.count
+
         val signals = mutableListOf<DetectedSignal>()
         if ((classes[SoundClass.SPEECH] ?: 0) >= 2) signals.add(DetectedSignal.SPEECH)
         if ((classes[SoundClass.COUGH] ?: 0) >= 1) signals.add(DetectedSignal.COUGH)
@@ -288,6 +300,8 @@ object SessionStatsComputer {
         if ((classes[SoundClass.SNORE] ?: 0) >= 3) signals.add(DetectedSignal.SNORE)
         if ((classes[SoundClass.DOG_BARK] ?: 0) >= 1) signals.add(DetectedSignal.DOG_BARKING)
         if ((classes[SoundClass.CAT_MEOW] ?: 0) >= 1) signals.add(DetectedSignal.CAT_MEOWING)
+        if ((classes[SoundClass.ESBUFEGAR] ?: 0) >= 2) signals.add(DetectedSignal.PANTING)
+        if (apneaEvents >= 1) signals.add(DetectedSignal.APNEA)
         val snores = audio.filter { it.classification == SoundClass.SNORE }
         if (snores.size >= 5) {
             val gaps = snores.zipWithNext { a, b -> b.timestamp - a.timestamp }
@@ -308,6 +322,7 @@ object SessionStatsComputer {
             movementEvents = motion.size,
             wakeMovementEvents = wakeMotion.size,
             interruptions = min(interruptions, 999),
+            apneaEvents = min(apneaEvents, 999),
             ambientAvgDb = ambientAvg,
             phaseDurations = phaseMs,
             qualityScore = qualityScore,
@@ -315,6 +330,142 @@ object SessionStatsComputer {
             groupingWindowMs = groupingWindowMs,
             minInterruptionMs = minInterruptionMs,
         )
+    }
+
+    /**
+     * Result of [detectApneaEvents]. [gaspChunkFiles] are the file paths of
+     * the audio chunks that were re-classified as the gasp that ends an
+     * apneic pause. They let the timeline surface them as APNEA_GASP
+     * instead of COUGH.
+     */
+    data class ApneaResult(val count: Int, val gaspChunkFiles: Set<String>)
+
+    /**
+     * Public entry point used by the Detail screen to re-classify gasp
+     * chunks in the event stream. Returns the same count/stats-integrity as
+     * the detector run inside [compute].
+     */
+    fun detectApneaEventsPublic(
+        audio: List<SessionEvent.AudioChunk>,
+        ambientAvg: Float,
+    ): ApneaResult = detectApneaEvents(audio, ambientAvg)
+
+    /**
+     * Compute stats and the set of audio chunks that should be re-labelled
+     * from COUGH to APNEA_GASP. The Detail screen uses this to render the
+     * timeline with the post-apneic gasps visible.
+     */
+    fun computeWithRelabels(
+        events: List<SessionEvent>,
+        fallbackEnd: Long? = null,
+        groupingWindowMs: Long = SessionStats.DEFAULT_GROUPING_WINDOW_MS,
+        minInterruptionMs: Long = SessionStats.DEFAULT_MIN_INTERRUPTION_MS,
+    ): SessionAnalysis {
+        val stats = compute(events, fallbackEnd, groupingWindowMs, minInterruptionMs)
+        val audio = events.filterIsInstance<SessionEvent.AudioChunk>()
+        val ambientAvg = if (audio.isEmpty()) 0f
+        else audio.map { it.ambientDb }.average().toFloat()
+        val gasps = detectApneaEvents(audio, ambientAvg).gaspChunkFiles
+        if (gasps.isEmpty()) return SessionAnalysis(stats, events)
+        val relabeled = events.map { ev ->
+            if (ev is SessionEvent.AudioChunk && ev.file in gasps)
+                ev.copy(classification = SoundClass.APNEA_GASP)
+            else ev
+        }
+        return SessionAnalysis(stats, relabeled)
+    }
+
+    data class SessionAnalysis(
+        val stats: SessionStats,
+        val relabeledEvents: List<SessionEvent>,
+    )
+
+    /**
+     * Walk the chronological list of audio chunks and detect the classic
+     * obstructive-apnea pattern: a rising-intensity snore run is followed by
+     * a silent gap of ≥ 10 s, and that silence is broken by a broadband,
+     * impulsive onset (the recovery gasp).
+     *
+     * The crescendo requirement (rising peak-above-ambient across the last
+     * few snore chunks before the gap) is the key feature that distinguishes
+     * apneic snoring from benign, steady snoring.
+     */
+    private fun detectApneaEvents(
+        audio: List<SessionEvent.AudioChunk>,
+        ambientAvg: Float,
+    ): ApneaResult {
+        if (audio.size < 2) return ApneaResult(0, emptySet())
+        val apneaMinGapMs = 10_000L
+        val gaspLookForwardMs = 5_000L
+        val crescendoWindowMs = 30_000L
+        val minGaspAboveAmbient = 10f
+        var count = 0
+        val gasps = mutableSetOf<String>()
+        var i = 0
+        while (i < audio.size - 1) {
+            val a = audio[i]
+            if (a.classification != SoundClass.SNORE) { i++; continue }
+            // Look forward for the next chunk that is ≥ apneaMinGapMs after
+            // the end of the current snore chunk.
+            var j = i + 1
+            while (j < audio.size && audio[j].timestamp - (a.timestamp + a.durationMs) < apneaMinGapMs) j++
+            if (j >= audio.size) { i++; continue }
+            val b = audio[j]
+            // The gap must be a real silence: no chunks in between (the
+            // noise gate would have emitted a chunk for any audible event,
+            // so an empty interval between two chunks means the room was
+            // genuinely quiet for that long).
+            if (j > i + 1) { i++; continue }
+            if (b.timestamp - a.timestamp > gaspLookForwardMs + apneaMinGapMs + 60_000L) {
+                // Look-forward window exceeded: the "next chunk" is too far
+                // away to plausibly be the recovery gasp. Move on.
+                i++; continue
+            }
+            val bAbove = b.peakDb - b.ambientDb
+            val looksLikeBroadbandOnset =
+                b.durationMs in 60..1500 &&
+                b.zcr > 0.10f &&
+                bAbove >= minGaspAboveAmbient
+            if (!looksLikeBroadbandOnset) { i++; continue }
+            // Crescendo check: among SNORE chunks in the last crescendoWindowMs
+            // before a, the peak-above-ambient should be rising.
+            val windowStart = a.timestamp - crescendoWindowMs
+            val recentSnores = (0..i)
+                .map { audio[it] }
+                .filter { it.classification == SoundClass.SNORE && it.timestamp >= windowStart }
+                .map { it.peakDb - it.ambientDb }
+            val isCrescendo = isRising(recentSnores)
+            if (!isCrescendo) { i++; continue }
+            count++
+            gasps.add(b.file)
+            // Skip past the gasp so we don't double-count overlapping events.
+            i = j + 1
+        }
+        return ApneaResult(count, gasps)
+    }
+
+    /**
+     * True if the sequence shows a clear rising trend. We accept either
+     * a monotonic rise across the tail, or a clearly positive linear slope
+     * with at least three points.
+     */
+    private fun isRising(values: List<Float>): Boolean {
+        if (values.size < 3) return false
+        // Simple linear regression slope.
+        val n = values.size
+        val xs = (0 until n).map { it.toDouble() }
+        val meanX = xs.average()
+        val meanY = values.average()
+        var num = 0.0
+        var den = 0.0
+        for (k in 0 until n) {
+            num += (xs[k] - meanX) * (values[k] - meanY)
+            den += (xs[k] - meanX) * (xs[k] - meanX)
+        }
+        if (den == 0.0) return false
+        val slope = num / den
+        // Slope must be clearly positive relative to the magnitude of the values.
+        return slope > 0.05 && values.last() - values.first() >= 2f
     }
 
     private fun empty(groupingWindowMs: Long, minInterruptionMs: Long) = SessionStats(
@@ -328,6 +479,7 @@ object SessionStatsComputer {
         movementEvents = 0,
         wakeMovementEvents = 0,
         interruptions = 0,
+        apneaEvents = 0,
         ambientAvgDb = 0f,
         phaseDurations = emptyMap(),
         qualityScore = 0,

@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -130,6 +131,14 @@ private val EDITABLE_SOUND_CLASSES = listOf(
     SoundClass.UNKNOWN,
 )
 
+// Sound classes that the timeline may surface (including the post-hoc
+// APNEA_GASP and the per-chunk ESBUFEGAR). Used for stat counters and labels;
+// these are NOT user-editable, so they are excluded from EDITABLE_SOUND_CLASSES.
+private val REPORTED_SOUND_CLASSES = EDITABLE_SOUND_CLASSES + listOf(
+    SoundClass.ESBUFEGAR,
+    SoundClass.APNEA_GASP,
+)
+
 private data class PlaybackState(
     val file: String,
     val timestamp: Long,
@@ -168,9 +177,9 @@ fun DetailScreen(
         mutableFloatStateOf(SessionStats.DEFAULT_MIN_INTERRUPTION_MS / 1000f)
     }
 
-    val stats by remember(events) {
+    val analysis by remember(events) {
         derivedStateOf {
-            SessionStatsComputer.compute(
+            SessionStatsComputer.computeWithRelabels(
                 events = events,
                 fallbackEnd = session.endedAt,
                 groupingWindowMs = (groupSeconds * 1000f).toLong(),
@@ -178,8 +187,10 @@ fun DetailScreen(
             )
         }
     }
-    val audioChunks = remember(events) {
-        events.filterIsInstance<SessionEvent.AudioChunk>().sortedBy { it.timestamp }
+    val stats = analysis.stats
+    val relabeledEvents = analysis.relabeledEvents
+    val audioChunks = remember(relabeledEvents) {
+        relabeledEvents.filterIsInstance<SessionEvent.AudioChunk>().sortedBy { it.timestamp }
     }
     val groups by remember(audioChunks) {
         derivedStateOf { AudioGrouping.group(audioChunks, (groupSeconds * 1000f).toLong()) }
@@ -187,15 +198,15 @@ fun DetailScreen(
     val significantGroups by remember(groups) {
         derivedStateOf { groups.filter { it.totalDurationMs >= (minIntSeconds * 1000f).toLong() } }
     }
-    val timelineRows by remember(events) {
-        derivedStateOf { buildTimelineRows(events, groups) }
+    val timelineRows by remember(relabeledEvents) {
+        derivedStateOf { buildTimelineRows(relabeledEvents, groups) }
     }
-    val pausedRanges = remember(events) { computePausedRanges(events) }
-    val screenOnTimestamps = remember(events) {
-        events.filterIsInstance<SessionEvent.ScreenOn>().map { it.timestamp }
+    val pausedRanges = remember(relabeledEvents) { computePausedRanges(relabeledEvents) }
+    val screenOnTimestamps = remember(relabeledEvents) {
+        relabeledEvents.filterIsInstance<SessionEvent.ScreenOn>().map { it.timestamp }
     }
-    val motionEvents = remember(events) {
-        events.filterIsInstance<SessionEvent.Motion>().sortedBy { it.timestamp }
+    val motionEvents = remember(relabeledEvents) {
+        relabeledEvents.filterIsInstance<SessionEvent.Motion>().sortedBy { it.timestamp }
     }
     val labels = remember { defaultTimelineLabels() }
 
@@ -1054,6 +1065,8 @@ private fun soundClassLabel(klass: SoundClass): String = when (klass) {
     SoundClass.MOVEMENT -> stringResource(R.string.sound_type_movement)
     SoundClass.NOISE -> stringResource(R.string.sound_type_noise)
     SoundClass.UNKNOWN -> stringResource(R.string.sound_type_unknown)
+    SoundClass.ESBUFEGAR -> stringResource(R.string.sound_type_panting)
+    SoundClass.APNEA_GASP -> stringResource(R.string.sound_type_apnea_gasp)
 }
 
 private fun soundClassColor(klass: SoundClass): Color = when (klass) {
@@ -1063,6 +1076,8 @@ private fun soundClassColor(klass: SoundClass): Color = when (klass) {
     SoundClass.SNORE -> MoonGlow
     SoundClass.DOG_BARK -> PinkDawn
     SoundClass.CAT_MEOW -> Lavender
+    SoundClass.ESBUFEGAR -> PinkDawn
+    SoundClass.APNEA_GASP -> PinkDawn
     SoundClass.NOISE -> OnNightMuted
     SoundClass.UNKNOWN -> OnNightMuted
 }
@@ -1781,6 +1796,12 @@ private fun eventStatItems(stats: SessionStats): List<EventStatItem> {
         contentDescription = stringResource(R.string.interruptions),
     )
     items.addCountStat(
+        count = stats.apneaEvents,
+        icon = Icons.Filled.Air,
+        accent = PinkDawn,
+        contentDescription = stringResource(R.string.apnea_events),
+    )
+    items.addCountStat(
         count = stats.screenOnEvents,
         icon = Icons.Filled.PhoneAndroid,
         accent = Lavender,
@@ -1799,7 +1820,7 @@ private fun eventStatItems(stats: SessionStats): List<EventStatItem> {
         contentDescription = stringResource(R.string.wake_movement_events),
     )
 
-    EDITABLE_SOUND_CLASSES.forEach { klass ->
+    REPORTED_SOUND_CLASSES.forEach { klass ->
         items.addCountStat(
             count = stats.audioChunksByClass[klass] ?: 0,
             icon = soundClassIcon(klass),
@@ -1903,4 +1924,6 @@ private fun signalLabelAndColor(sig: DetectedSignal): Pair<String, Color> = when
     DetectedSignal.IRREGULAR_BREATHING -> stringResource(R.string.signal_breathing) to PinkDawn
     DetectedSignal.DOG_BARKING -> stringResource(R.string.signal_dog) to PinkDawn
     DetectedSignal.CAT_MEOWING -> stringResource(R.string.signal_cat) to Lavender
+    DetectedSignal.APNEA -> stringResource(R.string.signal_apnea) to PinkDawn
+    DetectedSignal.PANTING -> stringResource(R.string.signal_panting) to PinkDawn
 }

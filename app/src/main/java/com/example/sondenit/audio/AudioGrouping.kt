@@ -31,8 +31,8 @@ data class NoiseGroup(
 
     private companion object {
         val PREFERENCE = listOf(
-            SoundClass.SPEECH, SoundClass.COUGH, SoundClass.DOG_BARK,
-            SoundClass.CAT_MEOW, SoundClass.SNORE, SoundClass.MOVEMENT,
+            SoundClass.APNEA_GASP, SoundClass.SPEECH, SoundClass.COUGH, SoundClass.DOG_BARK,
+            SoundClass.CAT_MEOW, SoundClass.ESBUFEGAR, SoundClass.SNORE, SoundClass.MOVEMENT,
             SoundClass.NOISE, SoundClass.UNKNOWN,
         )
     }

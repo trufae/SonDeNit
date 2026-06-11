@@ -160,6 +160,8 @@ fun describeSound(klass: SoundClass): Pair<String, Color> = when (klass) {
     SoundClass.SNORE -> "Roncs / respiració" to MoonGlow
     SoundClass.DOG_BARK -> "Lladruc de gos" to PinkDawn
     SoundClass.CAT_MEOW -> "Miol de gat" to Lavender
+    SoundClass.ESBUFEGAR -> "Respiració forta" to PinkDawn
+    SoundClass.APNEA_GASP -> "Recuperació d'apnea" to PinkDawn
     SoundClass.NOISE -> "Soroll" to OnNightMuted
     SoundClass.UNKNOWN -> "So lleu" to OnNightMuted
 }
