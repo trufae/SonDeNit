@@ -252,6 +252,12 @@ private fun AppRoot() {
                             recordingStartDelaySeconds = seconds
                             AudioSettings.setRecordingStartDelaySeconds(context.applicationContext, seconds)
                         },
+                        onResetDefaults = {
+                            AudioSettings.resetDefaults(context.applicationContext)
+                            equalizationAmount = AudioSettings.DEFAULT_EQUALIZATION
+                            playbackAmplificationAmount = AudioSettings.DEFAULT_PLAYBACK_AMPLIFICATION
+                            recordingStartDelaySeconds = AudioSettings.DEFAULT_RECORDING_START_DELAY_SECONDS
+                        },
                         onRequestMic = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                         onBack = { screen = Screen.Home },
                     )

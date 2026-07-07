@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
@@ -87,6 +88,7 @@ fun SettingsScreen(
     onEqualizationChange: (Float) -> Unit,
     onPlaybackAmplificationChange: (Float) -> Unit,
     onRecordingStartDelayChange: (Int) -> Unit,
+    onResetDefaults: () -> Unit,
     onRequestMic: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -171,6 +173,9 @@ fun SettingsScreen(
                         SettingsTopBar(onBack = onBack)
                     }
                     item {
+                        ResetDefaultsButton(onResetDefaults = onResetDefaults)
+                    }
+                    item {
                         EqualizationPanel(
                             amount = equalizationAmount,
                             onChange = onEqualizationChange,
@@ -224,6 +229,9 @@ fun SettingsScreen(
                     SettingsTopBar(onBack = onBack)
                 }
                 item {
+                    ResetDefaultsButton(onResetDefaults = onResetDefaults)
+                }
+                item {
                     EqualizationPanel(
                         amount = equalizationAmount,
                         onChange = onEqualizationChange,
@@ -260,6 +268,36 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ResetDefaultsButton(onResetDefaults: () -> Unit) {
+    OutlinedButton(
+        onClick = onResetDefaults,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, OnNightMuted.copy(alpha = 0.35f)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = NightSurface.copy(alpha = 0.65f),
+            contentColor = OnNight,
+        ),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Restore,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = OnNight,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = stringResource(R.string.settings_reset_defaults),
+            color = OnNight,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 

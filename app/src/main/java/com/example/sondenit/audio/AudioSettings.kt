@@ -23,7 +23,7 @@ object AudioSettings {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putFloat(KEY_EQUALIZATION, amount.coerceIn(0f, 1f))
-            .apply()
+            .commit()
     }
 
     fun playbackAmplificationAmount(context: Context): Float =
@@ -35,7 +35,7 @@ object AudioSettings {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putFloat(KEY_PLAYBACK_AMPLIFICATION, amount.coerceIn(0f, 1f))
-            .apply()
+            .commit()
     }
 
     fun recordingStartDelaySeconds(context: Context): Int =
@@ -47,7 +47,16 @@ object AudioSettings {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .putInt(KEY_RECORDING_START_DELAY_SECONDS, seconds.coerceIn(0, RECORDING_START_DELAY_OPTIONS_SECONDS.max()))
-            .apply()
+            .commit()
+    }
+
+    fun resetDefaults(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .remove(KEY_EQUALIZATION)
+            .remove(KEY_PLAYBACK_AMPLIFICATION)
+            .remove(KEY_RECORDING_START_DELAY_SECONDS)
+            .commit()
     }
 
     fun percent(amount: Float): Int = (amount.coerceIn(0f, 1f) * 100f).roundToInt()

@@ -35,6 +35,7 @@
     <string name="settings">Configuració</string>
     <string name="settings_title">Configuració</string>
     <string name="settings_subtitle">Micròfon, moviment i càlcul del son</string>
+    <string name="settings_reset_defaults">Restaura els valors per defecte</string>
     <string name="settings_equalization_title">Realç del volum</string>
     <string name="settings_equalization_hint">%1$d%%</string>
     <string name="settings_equalization_description">A 0%% els sons es desen amb el volum capturat. Amb valors alts, els sons fluixos es pugen abans de desar-los perquè siguin més fàcils d\'escoltar; això també pot fer que sons llunyans semblin més propers i forts.</string>
