@@ -40,6 +40,10 @@
     <string name="settings_ambient_filter_description">Descarta brunzits gairebé constants, com ventiladors o aire condicionat, perquè no es guardin com a sons repetits tota la nit.</string>
     <string name="settings_ambient_filter_on">Activat</string>
     <string name="settings_ambient_filter_off">Desactivat</string>
+    <string name="settings_max_recording_title">Durada màxima de cada so</string>
+    <string name="settings_max_recording_description">Quan un so dura més que aquest límit, es desa només el primer fragment i no es crea cap altre enregistrament fins que torna el silenci.</string>
+    <string name="settings_max_recording_seconds">%1$d s</string>
+    <string name="settings_max_recording_minutes">%1$d min</string>
     <string name="settings_equalization_title">Realç del volum</string>
     <string name="settings_equalization_hint">%1$d%%</string>
     <string name="settings_equalization_description">A 0%% els sons es desen amb el volum capturat. Amb valors alts, els sons fluixos es pugen abans de desar-los perquè siguin més fàcils d\'escoltar; això també pot fer que sons llunyans semblin més propers i forts.</string>

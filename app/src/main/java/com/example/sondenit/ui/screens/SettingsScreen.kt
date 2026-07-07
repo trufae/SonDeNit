@@ -88,10 +88,12 @@ fun SettingsScreen(
     playbackAmplificationAmount: Float,
     recordingStartDelaySeconds: Int,
     ambientCancellationEnabled: Boolean,
+    maxRecordingSeconds: Int,
     onEqualizationChange: (Float) -> Unit,
     onPlaybackAmplificationChange: (Float) -> Unit,
     onRecordingStartDelayChange: (Int) -> Unit,
     onAmbientCancellationChange: (Boolean) -> Unit,
+    onMaxRecordingSecondsChange: (Int) -> Unit,
     onResetDefaults: () -> Unit,
     onRequestMic: () -> Unit,
     onBack: () -> Unit,
@@ -186,6 +188,12 @@ fun SettingsScreen(
                         )
                     }
                     item {
+                        MaxRecordingLengthPanel(
+                            seconds = maxRecordingSeconds,
+                            onSecondsChange = onMaxRecordingSecondsChange,
+                        )
+                    }
+                    item {
                         EqualizationPanel(
                             amount = equalizationAmount,
                             onChange = onEqualizationChange,
@@ -248,6 +256,12 @@ fun SettingsScreen(
                     )
                 }
                 item {
+                    MaxRecordingLengthPanel(
+                        seconds = maxRecordingSeconds,
+                        onSecondsChange = onMaxRecordingSecondsChange,
+                    )
+                }
+                item {
                     EqualizationPanel(
                         amount = equalizationAmount,
                         onChange = onEqualizationChange,
@@ -286,6 +300,76 @@ fun SettingsScreen(
         }
     }
 }
+
+@Composable
+private fun MaxRecordingLengthPanel(seconds: Int, onSecondsChange: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = maxRecordingLengthLabel(seconds)
+
+    SettingsPanel {
+        IconTitle(
+            icon = Icons.Filled.Timer,
+            accent = Lavender,
+            title = stringResource(R.string.settings_max_recording_title),
+            value = selectedLabel,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.settings_max_recording_description),
+            color = OnNightMuted,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(14.dp))
+        Box {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, Lavender.copy(alpha = 0.45f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = NightDeep.copy(alpha = 0.2f),
+                    contentColor = OnNight,
+                ),
+            ) {
+                Text(
+                    text = selectedLabel,
+                    color = OnNight,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = null,
+                    tint = OnNight,
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                AudioSettings.MAX_RECORDING_OPTIONS_SECONDS.forEach { optionSeconds ->
+                    DropdownMenuItem(
+                        text = { Text(maxRecordingLengthLabel(optionSeconds)) },
+                        onClick = {
+                            expanded = false
+                            onSecondsChange(optionSeconds)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun maxRecordingLengthLabel(seconds: Int): String =
+    if (seconds < 60) {
+        stringResource(R.string.settings_max_recording_seconds, seconds)
+    } else {
+        stringResource(R.string.settings_max_recording_minutes, seconds / 60)
+    }
 
 @Composable
 private fun AmbientCancellationPanel(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {

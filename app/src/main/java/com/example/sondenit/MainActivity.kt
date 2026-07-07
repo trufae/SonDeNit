@@ -113,6 +113,9 @@ private fun AppRoot() {
     var ambientCancellationEnabled by remember {
         mutableStateOf(AudioSettings.ambientCancellationEnabled(context.applicationContext))
     }
+    var maxRecordingSeconds by remember {
+        mutableStateOf(AudioSettings.maxRecordingSeconds(context.applicationContext))
+    }
     var screen by rememberSaveable(stateSaver = ScreenSaver) {
         mutableStateOf<Screen>(Screen.Home)
     }
@@ -244,6 +247,7 @@ private fun AppRoot() {
                         playbackAmplificationAmount = playbackAmplificationAmount,
                         recordingStartDelaySeconds = recordingStartDelaySeconds,
                         ambientCancellationEnabled = ambientCancellationEnabled,
+                        maxRecordingSeconds = maxRecordingSeconds,
                         onEqualizationChange = { amount ->
                             equalizationAmount = amount
                             AudioSettings.setEqualizationAmount(context.applicationContext, amount)
@@ -260,12 +264,17 @@ private fun AppRoot() {
                             ambientCancellationEnabled = enabled
                             AudioSettings.setAmbientCancellationEnabled(context.applicationContext, enabled)
                         },
+                        onMaxRecordingSecondsChange = { seconds ->
+                            maxRecordingSeconds = seconds
+                            AudioSettings.setMaxRecordingSeconds(context.applicationContext, seconds)
+                        },
                         onResetDefaults = {
                             AudioSettings.resetDefaults(context.applicationContext)
                             equalizationAmount = AudioSettings.DEFAULT_EQUALIZATION
                             playbackAmplificationAmount = AudioSettings.DEFAULT_PLAYBACK_AMPLIFICATION
                             recordingStartDelaySeconds = AudioSettings.DEFAULT_RECORDING_START_DELAY_SECONDS
                             ambientCancellationEnabled = AudioSettings.DEFAULT_AMBIENT_CANCELLATION
+                            maxRecordingSeconds = AudioSettings.DEFAULT_MAX_RECORDING_SECONDS
                         },
                         onRequestMic = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                         onBack = { screen = Screen.Home },

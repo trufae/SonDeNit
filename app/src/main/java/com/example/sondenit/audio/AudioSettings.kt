@@ -9,12 +9,15 @@ object AudioSettings {
     private const val KEY_PLAYBACK_AMPLIFICATION = "playback_amplification_amount"
     private const val KEY_RECORDING_START_DELAY_SECONDS = "recording_start_delay_seconds"
     private const val KEY_AMBIENT_CANCELLATION = "ambient_cancellation_enabled"
+    private const val KEY_MAX_RECORDING_SECONDS = "max_recording_seconds"
 
     const val DEFAULT_EQUALIZATION = 0.5f
     const val DEFAULT_PLAYBACK_AMPLIFICATION = 0f
     const val DEFAULT_RECORDING_START_DELAY_SECONDS = 5
     const val DEFAULT_AMBIENT_CANCELLATION = true
+    const val DEFAULT_MAX_RECORDING_SECONDS = 30
     val RECORDING_START_DELAY_OPTIONS_SECONDS = listOf(0, 3, 5, 10, 15, 20, 30)
+    val MAX_RECORDING_OPTIONS_SECONDS = listOf(5, 10, 15, 30, 60, 120)
 
     fun equalizationAmount(context: Context): Float =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -63,6 +66,25 @@ object AudioSettings {
             .commit()
     }
 
+    fun maxRecordingSeconds(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_MAX_RECORDING_SECONDS, DEFAULT_MAX_RECORDING_SECONDS)
+            .let { seconds ->
+                MAX_RECORDING_OPTIONS_SECONDS.minByOrNull { option ->
+                    kotlin.math.abs(option - seconds)
+                } ?: DEFAULT_MAX_RECORDING_SECONDS
+            }
+
+    fun setMaxRecordingSeconds(context: Context, seconds: Int) {
+        val closest = MAX_RECORDING_OPTIONS_SECONDS.minByOrNull { option ->
+            kotlin.math.abs(option - seconds)
+        } ?: DEFAULT_MAX_RECORDING_SECONDS
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(KEY_MAX_RECORDING_SECONDS, closest)
+            .commit()
+    }
+
     fun resetDefaults(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
@@ -70,6 +92,7 @@ object AudioSettings {
             .remove(KEY_PLAYBACK_AMPLIFICATION)
             .remove(KEY_RECORDING_START_DELAY_SECONDS)
             .remove(KEY_AMBIENT_CANCELLATION)
+            .remove(KEY_MAX_RECORDING_SECONDS)
             .commit()
     }
 

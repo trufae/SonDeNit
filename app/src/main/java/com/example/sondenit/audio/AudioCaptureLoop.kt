@@ -58,6 +58,7 @@ class AudioCaptureLoop(
         val frame = ShortArray(FRAME_SAMPLES)
         val gate = NoiseGate()
         val ambientSuppressor = AmbientNoiseSuppressor(FRAME_DURATION_MS)
+        val maxCaptureFrames = secondsToFrames(AudioSettings.maxRecordingSeconds(context))
 
         // Pre-roll keeps the very start of a sound (which would otherwise be
         // clipped because we only commit to a chunk after the gate fires).
@@ -65,15 +66,34 @@ class AudioCaptureLoop(
         val preRoll = ArrayDeque<ShortArray>(preRollFrames)
 
         var capturing = false
+        var suppressingUntilSilence = false
         var captureStart = 0L
-        val captureBuf = ArrayList<ShortArray>(MAX_CAPTURE_FRAMES)
+        val captureBuf = ArrayList<ShortArray>(maxCaptureFrames)
         var captureFrames = 0
         var capturePeak = 0
         var captureRmsSum = 0.0
         var captureZcrSum = 0.0
         var ambientAtStart = gate.floorDb
         var silenceFrames = 0
+        var suppressedSilenceFrames = 0
         val silenceLimit = (HANG_MS / FRAME_DURATION_MS).coerceAtLeast(1L).toInt()
+
+        fun clearCapture() {
+            capturing = false
+            captureBuf.clear()
+            captureFrames = 0
+            capturePeak = 0
+            captureRmsSum = 0.0
+            captureZcrSum = 0.0
+            silenceFrames = 0
+        }
+
+        fun suppressUntilSilence() {
+            clearCapture()
+            suppressingUntilSilence = true
+            suppressedSilenceFrames = 0
+            preRoll.clear()
+        }
 
         try {
             while (running) {
@@ -86,17 +106,37 @@ class AudioCaptureLoop(
                             captureBuf, captureFrames, captureStart, capturePeak,
                             captureRmsSum, captureZcrSum, ambientAtStart,
                         )
-                        capturing = false
-                        captureBuf.clear(); captureFrames = 0
-                        capturePeak = 0; captureRmsSum = 0.0; captureZcrSum = 0.0
+                        clearCapture()
                     }
+                    suppressingUntilSilence = false
+                    suppressedSilenceFrames = 0
                     onLevel(AudioMath.SILENCE_DB, gate.floorDb, false)
                     continue
                 }
 
                 val features = AudioMath.features(frame, read)
-                val active = gate.process(features.rmsDb, capturing)
+                val active = gate.process(features.rmsDb, capturing || suppressingUntilSilence)
                 onLevel(features.rmsDb, gate.floorDb, capturing)
+
+                if (suppressingUntilSilence) {
+                    if (
+                        active &&
+                        AudioSettings.ambientCancellationEnabled(context) &&
+                        ambientSuppressor.add(features)
+                    ) {
+                        gate.absorbAmbient(ambientSuppressor.estimatedAmbientDb)
+                        suppressedSilenceFrames = 0
+                        onLevel(features.rmsDb, gate.floorDb, false)
+                        continue
+                    }
+                    suppressedSilenceFrames = if (active) 0 else suppressedSilenceFrames + 1
+                    if (suppressedSilenceFrames >= silenceLimit) {
+                        suppressingUntilSilence = false
+                        suppressedSilenceFrames = 0
+                        preRoll.clear()
+                    }
+                    continue
+                }
 
                 if (!capturing) {
                     // Maintain rolling pre-roll window.
@@ -134,26 +174,23 @@ class AudioCaptureLoop(
                         ambientSuppressor.add(features)
                     ) {
                         gate.absorbAmbient(ambientSuppressor.estimatedAmbientDb)
-                        capturing = false
-                        captureBuf.clear(); captureFrames = 0
-                        capturePeak = 0; captureRmsSum = 0.0; captureZcrSum = 0.0
-                        silenceFrames = 0
-                        preRoll.clear()
+                        suppressUntilSilence()
                         onLevel(features.rmsDb, gate.floorDb, false)
                         continue
                     }
 
-                    val tooLong = captureFrames >= MAX_CAPTURE_FRAMES
+                    val tooLong = captureFrames >= maxCaptureFrames
                     val finishedQuiet = silenceFrames >= silenceLimit
                     if (tooLong || finishedQuiet) {
                         finalizeChunk(
                             captureBuf, captureFrames, captureStart, capturePeak,
                             captureRmsSum, captureZcrSum, ambientAtStart,
                         )
-                        capturing = false
-                        captureBuf.clear(); captureFrames = 0
-                        capturePeak = 0; captureRmsSum = 0.0; captureZcrSum = 0.0
-                        silenceFrames = 0
+                        if (tooLong && !finishedQuiet) {
+                            suppressUntilSilence()
+                        } else {
+                            clearCapture()
+                        }
                     }
                 }
             }
@@ -235,7 +272,8 @@ class AudioCaptureLoop(
         private const val PRE_ROLL_MS = 500L
         private const val HANG_MS = 1500L
         private const val MIN_CHUNK_MS = 250L
-        private const val MAX_CAPTURE_MS = 30_000L
-        private const val MAX_CAPTURE_FRAMES = (MAX_CAPTURE_MS / FRAME_DURATION_MS).toInt()
+
+        private fun secondsToFrames(seconds: Int): Int =
+            ((seconds.coerceAtLeast(1) * 1000L) / FRAME_DURATION_MS).coerceAtLeast(1L).toInt()
     }
 }
