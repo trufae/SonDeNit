@@ -1,4 +1,4 @@
-VERSION := 0.7.0
+VERSION := 0.7.2
 APK_NAME := SonDeNit-$(VERSION).apk
 RELEASE_APK := app/build/outputs/apk/release/app-release-unsigned.apk
 ALIGNED_APK := app/build/outputs/apk/release/app-release-aligned.apk
