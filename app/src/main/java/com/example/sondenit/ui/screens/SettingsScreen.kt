@@ -44,6 +44,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -85,9 +87,11 @@ fun SettingsScreen(
     equalizationAmount: Float,
     playbackAmplificationAmount: Float,
     recordingStartDelaySeconds: Int,
+    ambientCancellationEnabled: Boolean,
     onEqualizationChange: (Float) -> Unit,
     onPlaybackAmplificationChange: (Float) -> Unit,
     onRecordingStartDelayChange: (Int) -> Unit,
+    onAmbientCancellationChange: (Boolean) -> Unit,
     onResetDefaults: () -> Unit,
     onRequestMic: () -> Unit,
     onBack: () -> Unit,
@@ -176,6 +180,12 @@ fun SettingsScreen(
                         ResetDefaultsButton(onResetDefaults = onResetDefaults)
                     }
                     item {
+                        AmbientCancellationPanel(
+                            enabled = ambientCancellationEnabled,
+                            onEnabledChange = onAmbientCancellationChange,
+                        )
+                    }
+                    item {
                         EqualizationPanel(
                             amount = equalizationAmount,
                             onChange = onEqualizationChange,
@@ -232,6 +242,12 @@ fun SettingsScreen(
                     ResetDefaultsButton(onResetDefaults = onResetDefaults)
                 }
                 item {
+                    AmbientCancellationPanel(
+                        enabled = ambientCancellationEnabled,
+                        onEnabledChange = onAmbientCancellationChange,
+                    )
+                }
+                item {
                     EqualizationPanel(
                         amount = equalizationAmount,
                         onChange = onEqualizationChange,
@@ -267,6 +283,44 @@ fun SettingsScreen(
                     PhaseExplanationPanel()
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AmbientCancellationPanel(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
+    SettingsPanel {
+        IconTitle(
+            icon = Icons.Filled.GraphicEq,
+            accent = SkyTeal,
+            title = stringResource(R.string.settings_ambient_filter_title),
+            value = stringResource(
+                if (enabled) R.string.settings_ambient_filter_on else R.string.settings_ambient_filter_off
+            ),
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_ambient_filter_description),
+                color = OnNightMuted,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = NightDeep,
+                    checkedTrackColor = SkyTeal,
+                    uncheckedThumbColor = OnNightMuted,
+                    uncheckedTrackColor = NightDeep.copy(alpha = 0.7f),
+                    uncheckedBorderColor = OnNightMuted.copy(alpha = 0.45f),
+                ),
+            )
         }
     }
 }

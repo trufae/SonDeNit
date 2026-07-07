@@ -35,4 +35,8 @@ class NoiseGate(
         }
         return isActive
     }
+
+    fun absorbAmbient(ambientDb: Float) {
+        floorDb = maxOf(floorDb, ambientDb.coerceIn(AudioMath.SILENCE_DB, 0f))
+    }
 }

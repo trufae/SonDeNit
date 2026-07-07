@@ -8,10 +8,12 @@ object AudioSettings {
     private const val KEY_EQUALIZATION = "equalization_amount"
     private const val KEY_PLAYBACK_AMPLIFICATION = "playback_amplification_amount"
     private const val KEY_RECORDING_START_DELAY_SECONDS = "recording_start_delay_seconds"
+    private const val KEY_AMBIENT_CANCELLATION = "ambient_cancellation_enabled"
 
     const val DEFAULT_EQUALIZATION = 0.5f
     const val DEFAULT_PLAYBACK_AMPLIFICATION = 0f
     const val DEFAULT_RECORDING_START_DELAY_SECONDS = 5
+    const val DEFAULT_AMBIENT_CANCELLATION = true
     val RECORDING_START_DELAY_OPTIONS_SECONDS = listOf(0, 3, 5, 10, 15, 20, 30)
 
     fun equalizationAmount(context: Context): Float =
@@ -50,12 +52,24 @@ object AudioSettings {
             .commit()
     }
 
+    fun ambientCancellationEnabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AMBIENT_CANCELLATION, DEFAULT_AMBIENT_CANCELLATION)
+
+    fun setAmbientCancellationEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_AMBIENT_CANCELLATION, enabled)
+            .commit()
+    }
+
     fun resetDefaults(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
             .remove(KEY_EQUALIZATION)
             .remove(KEY_PLAYBACK_AMPLIFICATION)
             .remove(KEY_RECORDING_START_DELAY_SECONDS)
+            .remove(KEY_AMBIENT_CANCELLATION)
             .commit()
     }
 

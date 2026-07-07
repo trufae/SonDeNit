@@ -57,6 +57,7 @@ class AudioCaptureLoop(
 
         val frame = ShortArray(FRAME_SAMPLES)
         val gate = NoiseGate()
+        val ambientSuppressor = AmbientNoiseSuppressor(FRAME_DURATION_MS)
 
         // Pre-roll keeps the very start of a sound (which would otherwise be
         // clipped because we only commit to a chunk after the gate fires).
@@ -108,6 +109,7 @@ class AudioCaptureLoop(
                         captureStart = System.currentTimeMillis() -
                                 preRoll.size.toLong() * FRAME_DURATION_MS
                         ambientAtStart = gate.floorDb
+                        ambientSuppressor.reset(ambientAtStart)
                         for (f in preRoll) {
                             captureBuf.add(f)
                             captureFrames++
@@ -126,6 +128,20 @@ class AudioCaptureLoop(
                     captureZcrSum += features.zcr
                     if (features.peak > capturePeak) capturePeak = features.peak
                     silenceFrames = if (active) 0 else silenceFrames + 1
+                    if (
+                        active &&
+                        AudioSettings.ambientCancellationEnabled(context) &&
+                        ambientSuppressor.add(features)
+                    ) {
+                        gate.absorbAmbient(ambientSuppressor.estimatedAmbientDb)
+                        capturing = false
+                        captureBuf.clear(); captureFrames = 0
+                        capturePeak = 0; captureRmsSum = 0.0; captureZcrSum = 0.0
+                        silenceFrames = 0
+                        preRoll.clear()
+                        onLevel(features.rmsDb, gate.floorDb, false)
+                        continue
+                    }
 
                     val tooLong = captureFrames >= MAX_CAPTURE_FRAMES
                     val finishedQuiet = silenceFrames >= silenceLimit
